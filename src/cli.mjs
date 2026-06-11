@@ -10,6 +10,8 @@ import {
 } from "./runtime.mjs";
 import { generateIdeas } from "./ideation.mjs";
 import { generatePrPack } from "./pr-pack.mjs";
+import { runDevLoop } from "./dev-loop.mjs";
+import { generateWorkPack } from "./work-pack.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -46,6 +48,8 @@ Usage:
   level-up init --target <repo> --goal <goal> [--metric <metric>]
   level-up scan --run <run-root>
   level-up ideas --run <run-root>
+  level-up work-pack --run <run-root>
+  level-up dev-loop --run <run-root> --phase baseline|experiment|final [--execute]
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
@@ -99,6 +103,21 @@ async function main() {
 
   if (command === "ideas") {
     print(generateIdeas(requireValue(args, "run"), { limit: args.limit }));
+    return;
+  }
+
+  if (command === "work-pack") {
+    print(generateWorkPack(requireValue(args, "run")));
+    return;
+  }
+
+  if (command === "dev-loop") {
+    print(
+      runDevLoop(requireValue(args, "run"), {
+        phase: requireValue(args, "phase"),
+        execute: Boolean(args.execute)
+      })
+    );
     return;
   }
 

@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
+import { generateWorkPack } from "../src/work-pack.mjs";
 
 function sh(cwd, command, args) {
   const result = spawnSync(command, args, {
@@ -114,6 +116,33 @@ test("generateIdeas writes structured experiment candidates", () => {
   assert.equal(ideas.candidates[0].validation[0].command, "npm run check");
 });
 
+test("generateWorkPack writes SPEC and TODO artifacts", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Make work reviewable",
+    metric: "Increase review confidence"
+  });
+  const pack = generateWorkPack(result.runRoot);
+  assert.ok(existsSync(pack.files.spec));
+  assert.ok(existsSync(pack.files.todo));
+  assert.match(readFileSync(pack.files.spec, "utf8"), /Make work reviewable/);
+});
+
+test("runDevLoop writes a dry-run phase plan", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Plan validation",
+    metric: "Increase validation confidence"
+  });
+  scanTarget(repo, result.runRoot);
+  const phase = runDevLoop(result.runRoot, { phase: "baseline" });
+  assert.equal(phase.status, "planned");
+  assert.equal(phase.executed, false);
+  assert.equal(phase.commands[0].command, "npm run check");
+});
+
 test("generatePrPack writes PR body, bug review, and visual evidence artifacts", () => {
   const repo = fixtureRepo();
   const result = createRun({
@@ -123,6 +152,8 @@ test("generatePrPack writes PR body, bug review, and visual evidence artifacts",
   });
   scanTarget(repo, result.runRoot);
   generateIdeas(result.runRoot);
+  generateWorkPack(result.runRoot);
+  runDevLoop(result.runRoot, { phase: "baseline" });
   appendLedger(result.runRoot, {
     status: "keep",
     score: 1,
@@ -137,4 +168,6 @@ test("generatePrPack writes PR body, bug review, and visual evidence artifacts",
   assert.match(pack.files.prBody, /PR_BODY\.md$/);
   assert.match(pack.files.bugReview, /BUG_REVIEW_REQUEST\.md$/);
   assert.match(pack.files.visualEvidence, /VISUAL_EVIDENCE\.md$/);
+  assert.match(readFileSync(pack.files.prBody, "utf8"), /## Work Pack/);
+  assert.match(readFileSync(pack.files.prBody, "utf8"), /## Dev Loop/);
 });

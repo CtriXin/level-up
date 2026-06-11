@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/work-pack.schema.json",
+  "title": "LevelUpWorkPack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "runId", "createdAt", "files"],
+  "properties": {
+    "version": { "type": "string" },
+    "runId": { "type": "string" },
+    "createdAt": { "type": "string" },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spec", "todo", "manifest"],
+      "properties": {
+        "spec": { "type": "string" },
+        "todo": { "type": "string" },
+        "manifest": { "type": "string" }
+      }
+    }
+  }
+}

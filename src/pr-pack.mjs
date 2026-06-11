@@ -8,6 +8,10 @@ export function generatePrPack(runRootInput, options = {}) {
   const state = readJson(join(runRoot, "state.json"));
   const scan = readOptionalJson(join(runRoot, "scan.json"));
   const ideas = readOptionalJson(join(runRoot, "ideas.json"));
+  const workPack = readOptionalJson(join(runRoot, "work-pack", "manifest.json"));
+  const devLoops = ["baseline", "experiment", "final"]
+    .map((phase) => readOptionalJson(join(runRoot, `dev-loop-${phase}.json`)))
+    .filter(Boolean);
   const ledger = readLedger(join(runRoot, "ledger.tsv"));
   const createdAt = new Date().toISOString();
   const outputDir = join(runRoot, "pr");
@@ -30,7 +34,7 @@ export function generatePrPack(runRootInput, options = {}) {
     }
   };
 
-  writeFileSync(manifest.files.prBody, renderPrBody({ goal, state, scan, ideas, ledger, visualMode }));
+  writeFileSync(manifest.files.prBody, renderPrBody({ goal, state, scan, ideas, workPack, devLoops, ledger, visualMode }));
   writeFileSync(manifest.files.bugReview, renderBugReview({ goal, state, ledger, reviewerBot }));
   writeFileSync(manifest.files.visualEvidence, renderVisualEvidence({ goal, visualMode }));
   writeJson(manifest.files.manifest, manifest);
@@ -69,7 +73,7 @@ function inferVisualMode(goal, ideas) {
   return /\b(ui|visual|design|screenshot|responsive|layout|css|homepage|page)\b/.test(text);
 }
 
-function renderPrBody({ goal, state, scan, ideas, ledger, visualMode }) {
+function renderPrBody({ goal, state, scan, ideas, workPack, devLoops, ledger, visualMode }) {
   const kept = ledger.filter((entry) => entry.status === "keep");
   const discarded = ledger.filter((entry) => entry.status === "discard");
   const crashed = ledger.filter((entry) => entry.status === "crash");
@@ -106,6 +110,14 @@ ${renderLedgerTable(ledger)}
 
 ${renderValidation(scan)}
 
+## Work Pack
+
+${renderWorkPack(workPack)}
+
+## Dev Loop
+
+${renderDevLoops(devLoops)}
+
 ## Review Gate
 
 - [ ] Bug review completed
@@ -123,6 +135,23 @@ ${visualMode
 
 ${renderIdeas(ideas)}
 `;
+}
+
+function renderWorkPack(workPack) {
+  if (!workPack) {
+    return "_No work-pack generated yet._";
+  }
+  return `- spec: \`${workPack.files.spec}\`
+- todo: \`${workPack.files.todo}\``;
+}
+
+function renderDevLoops(devLoops) {
+  if (!devLoops.length) {
+    return "_No dev-loop phase artifacts generated yet._";
+  }
+  return devLoops
+    .map((loop) => `- ${loop.phase}: ${loop.status} (${loop.executed ? "executed" : "planned"})`)
+    .join("\n");
 }
 
 function formatMetricName(value) {

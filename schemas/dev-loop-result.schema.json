@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/dev-loop-result.schema.json",
+  "title": "LevelUpDevLoopResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "runId", "phase", "status", "executed", "cwd", "commands", "createdAt"],
+  "properties": {
+    "version": { "type": "string" },
+    "runId": { "type": "string" },
+    "phase": {
+      "type": "string",
+      "enum": ["baseline", "experiment", "final"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planned", "pass", "fail", "blocked"]
+    },
+    "executed": { "type": "boolean" },
+    "cwd": { "type": "string" },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "status"],
+        "properties": {
+          "command": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "pass", "fail", "skipped"]
+          },
+          "exitCode": { "type": "integer" },
+          "stdout": { "type": "string" },
+          "stderr": { "type": "string" }
+        }
+      }
+    },
+    "createdAt": { "type": "string" }
+  }
+}

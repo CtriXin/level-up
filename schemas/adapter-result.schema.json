@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/adapter-result.schema.json",
+  "title": "LevelUpAdapterResult",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version", "adapter", "status", "summary"],
+  "properties": {
+    "version": { "type": "string" },
+    "adapter": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail", "blocked", "skipped"]
+    },
+    "summary": { "type": "string" },
+    "skipReason": { "type": "string" },
+    "assumption": { "type": "string" },
+    "riskIfWrong": { "type": "string" },
+    "revisitTrigger": { "type": "string" },
+    "data": { "type": "object" }
+  }
+}
