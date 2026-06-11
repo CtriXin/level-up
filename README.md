@@ -44,6 +44,7 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `recovery`: nsr-lite milestones, next action, and resume state.
 - `policy`: hard gates, forbidden actions, and human approval boundaries.
 - `runner`: current session now; future opencode/MMS/external model process adapters.
+- `notify`: Feishu/GitHub/GitLab notification adapters after PR or MR creation.
 
 ## Quick Start
 
@@ -74,6 +75,21 @@ npm run level-up -- runner-pack --run /path/to/project/.level-up/runs/<run-id> \
 ```
 
 The current recommended mode is hybrid: the Codex/MMS session acts as the model runner, while `level-up` records runtime state, validation, self-review, ledger, and PR evidence. Future `opencode-profile` and `mms-runner` adapters should consume the same packet.
+
+Notify Feishu after a PR or MR is created:
+
+```bash
+npm run level-up -- notify \
+  --channel feishu \
+  --repo level-up \
+  --branch "codex/example -> main" \
+  --title "perf: 优化首页首屏加载和事件逻辑" \
+  --link "https://github.com/CtriXin/level-up/pull/5" \
+  --status "check/build/self-review 通过" \
+  --effect "首页主 JS gzip 下降"
+```
+
+The webhook must come from runtime environment such as `FEISHU_WEBHOOK_URL`; do not commit webhook URLs.
 
 Step-by-step commands remain available for debugging or manual control:
 
