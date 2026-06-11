@@ -286,30 +286,44 @@ function resolveApplyInputs({ applyCommand, applyPatch, applyWriteFile, applyCon
     applyContent: renderTemplate(applyContent, templateValues),
     applyContentFile: renderTemplate(applyContentFile, templateValues)
   };
+  const adaptiveApply = strategy?.adaptation?.apply;
+  if (strategy?.syntheticCandidate && adaptiveApply) {
+    return resolveAdaptiveApply(explicit, adaptiveApply, templateValues);
+  }
   if (hasApplyInput(explicit)) {
     return explicit;
   }
 
-  const adaptiveApply = strategy?.adaptation?.apply;
   if (!adaptiveApply) {
     return explicit;
   }
+  return resolveAdaptiveApply(explicit, adaptiveApply, templateValues);
+}
+
+function resolveAdaptiveApply(explicit, adaptiveApply, templateValues) {
+  const base = {
+    applyCommand: undefined,
+    applyPatch: undefined,
+    applyWriteFile: undefined,
+    applyContent: undefined,
+    applyContentFile: undefined
+  };
   if (adaptiveApply.mode === "write-file") {
     return {
-      ...explicit,
+      ...base,
       applyWriteFile: renderTemplate(adaptiveApply.targetFile, templateValues),
       applyContent: renderTemplate(adaptiveApply.content, templateValues)
     };
   }
   if (adaptiveApply.mode === "command") {
     return {
-      ...explicit,
+      ...base,
       applyCommand: renderTemplate(adaptiveApply.command, templateValues)
     };
   }
   if (adaptiveApply.mode === "patch") {
     return {
-      ...explicit,
+      ...base,
       applyPatch: renderTemplate(adaptiveApply.patchFile, templateValues)
     };
   }
