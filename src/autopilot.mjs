@@ -3,13 +3,13 @@ import { join, resolve } from "node:path";
 import { generateIdeas } from "./ideation.mjs";
 import { generatePrPack } from "./pr-pack.mjs";
 import {
+  VERSION,
   appendLedger,
   createWorktree,
   ensureDir,
   readJson,
   runGit,
   scanTarget,
-  VERSION,
   writeJson
 } from "./runtime.mjs";
 import { runDevLoop } from "./dev-loop.mjs";
@@ -58,7 +58,7 @@ export function runAutopilot(runRootInput, options = {}) {
       commitKept: Boolean(options.commitKept)
     });
     results.push(experiment);
-    if (experiment.decision !== "keep") {
+    if (experiment.decision !== "keep" && !shouldContinueAfterDiscard(experiment, index, maxRounds, options)) {
       break;
     }
   }
@@ -67,7 +67,7 @@ export function runAutopilot(runRootInput, options = {}) {
   const summary = {
     version: VERSION,
     runId: goal.runId,
-    status: results.every((result) => result.decision === "keep") ? "pass" : "stopped",
+    status: summaryStatus(results),
     rounds: results,
     prPack
   };
@@ -112,13 +112,16 @@ function runRound({
   const experimentDir = join(runRoot, "experiments", `round-${String(round).padStart(3, "0")}`);
   ensureDir(experimentDir);
   const templateValues = applyTemplateValues({ round, candidate });
-  const resolvedApply = {
-    applyCommand: renderTemplate(applyCommand, templateValues),
-    applyPatch: renderTemplate(applyPatch, templateValues),
-    applyWriteFile: renderTemplate(applyWriteFile, templateValues),
-    applyContent: renderTemplate(applyContent, templateValues),
-    applyContentFile: renderTemplate(applyContentFile, templateValues)
-  };
+  const resolvedApply = resolveApplyInputs({
+    applyCommand,
+    applyPatch,
+    applyWriteFile,
+    applyContent,
+    applyContentFile,
+    strategy,
+    templateValues
+  });
+
   writeExperimentMarkdown(join(experimentDir, "EXPERIMENT.md"), {
     round,
     candidate,
@@ -151,7 +154,7 @@ function runRound({
   const review = reviewExperiment({
     worktreePath,
     candidate,
-    applyCommand,
+    applyCommand: resolvedApply.applyCommand,
     devLoopResults: [experimentPhase, finalPhase]
   });
   const changed = after.length > 0 && before !== after;
@@ -228,6 +231,32 @@ ${execute ? "execute" : "planned"}
   );
 }
 
+function shouldContinueAfterDiscard(experiment, index, maxRounds, options) {
+  if (options.adaptive === false) {
+    return false;
+  }
+  if (experiment.decision !== "discard") {
+    return false;
+  }
+  if (index >= maxRounds - 1) {
+    return false;
+  }
+  if (experiment.apply?.status === "blocked") {
+    return false;
+  }
+  return true;
+}
+
+function summaryStatus(results) {
+  if (results.every((result) => result.decision === "keep")) {
+    return "pass";
+  }
+  if (results.some((result) => result.decision === "keep")) {
+    return "adapted";
+  }
+  return "stopped";
+}
+
 function renderApplyIntent({ applyCommand, applyPatch, applyWriteFile }) {
   if (applyCommand) {
     return `mode: command\n\n\`${applyCommand}\``;
@@ -247,6 +276,48 @@ function applyTemplateValues({ round, candidate }) {
     roundPadded: String(round).padStart(3, "0"),
     candidateId: candidate.id
   };
+}
+
+function resolveApplyInputs({ applyCommand, applyPatch, applyWriteFile, applyContent, applyContentFile, strategy, templateValues }) {
+  const explicit = {
+    applyCommand: renderTemplate(applyCommand, templateValues),
+    applyPatch: renderTemplate(applyPatch, templateValues),
+    applyWriteFile: renderTemplate(applyWriteFile, templateValues),
+    applyContent: renderTemplate(applyContent, templateValues),
+    applyContentFile: renderTemplate(applyContentFile, templateValues)
+  };
+  if (hasApplyInput(explicit)) {
+    return explicit;
+  }
+
+  const adaptiveApply = strategy?.adaptation?.apply;
+  if (!adaptiveApply) {
+    return explicit;
+  }
+  if (adaptiveApply.mode === "write-file") {
+    return {
+      ...explicit,
+      applyWriteFile: renderTemplate(adaptiveApply.targetFile, templateValues),
+      applyContent: renderTemplate(adaptiveApply.content, templateValues)
+    };
+  }
+  if (adaptiveApply.mode === "command") {
+    return {
+      ...explicit,
+      applyCommand: renderTemplate(adaptiveApply.command, templateValues)
+    };
+  }
+  if (adaptiveApply.mode === "patch") {
+    return {
+      ...explicit,
+      applyPatch: renderTemplate(adaptiveApply.patchFile, templateValues)
+    };
+  }
+  return explicit;
+}
+
+function hasApplyInput(inputs) {
+  return Boolean(inputs.applyCommand || inputs.applyPatch || inputs.applyWriteFile);
 }
 
 function renderTemplate(value, replacements) {

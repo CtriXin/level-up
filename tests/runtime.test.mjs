@@ -350,6 +350,35 @@ test("runAutopilot proves multi-round strategy by keeping different candidates",
   }
 });
 
+test("runAutopilot adapts after a no-change discard with concrete apply", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Adapt after a no-change experiment",
+    metric: "Increase adaptive strategy confidence"
+  });
+  const summary = runAutopilot(result.runRoot, {
+    rounds: 2,
+    execute: true,
+    commitKept: true,
+    runner: "current-session",
+    runnerProfile: "codex-session"
+  });
+  const [first, second] = summary.rounds;
+
+  assert.equal(summary.status, "adapted");
+  assert.equal(first.decision, "discard");
+  assert.equal(first.evaluation.checks.changed, false);
+  assert.equal(second.strategy.adaptation.trigger, "no-change");
+  assert.equal(second.strategy.adaptation.action, "concretize-apply");
+  assert.equal(second.apply.mode, "write-file");
+  assert.equal(second.apply.status, "pass");
+  assert.equal(second.decision, "keep");
+  assert.notEqual(second.commit, "0000000");
+  assert.ok(existsSync(second.strategy.files.manifest));
+  assert.ok(existsSync(second.evaluation.files.manifest));
+});
+
 test("runAutopilot blocks unsafe command apply before it can keep", () => {
   const repo = fixtureRepo();
   const result = createRun({
