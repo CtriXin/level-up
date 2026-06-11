@@ -4,10 +4,12 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { runAutopilot } from "../src/autopilot.mjs";
 import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
+import { reviewExperiment } from "../src/self-review.mjs";
 import { generateWorkPack } from "../src/work-pack.mjs";
 
 function sh(cwd, command, args) {
@@ -170,4 +172,42 @@ test("generatePrPack writes PR body, bug review, and visual evidence artifacts",
   assert.match(pack.files.visualEvidence, /VISUAL_EVIDENCE\.md$/);
   assert.match(readFileSync(pack.files.prBody, "utf8"), /## Work Pack/);
   assert.match(readFileSync(pack.files.prBody, "utf8"), /## Dev Loop/);
+});
+
+test("runAutopilot discards a no-op experiment and still writes PR evidence", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Reach practical L3 by trying a local no-op safely",
+    metric: "Increase autopilot safety confidence"
+  });
+  const summary = runAutopilot(result.runRoot, { prPack: true });
+  assert.equal(summary.status, "stopped");
+  assert.equal(summary.rounds.length, 1);
+  assert.equal(summary.rounds[0].decision, "discard");
+  assert.equal(summary.rounds[0].changed, false);
+  assert.ok(summary.prPack.files.prBody.endsWith("PR_BODY.md"));
+});
+
+test("reviewExperiment blocks unsafe apply commands before keep", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Keep unsafe commands out of autopilot",
+    metric: "Increase safety"
+  });
+  const worktree = createWorktree(result.runRoot);
+  const review = reviewExperiment({
+    worktreePath: worktree.worktreePath,
+    candidate: {
+      id: "unsafe-command",
+      hypothesis: "unsafe command detection should block the run",
+      expectedImpact: "fewer dangerous local mutations",
+      rollback: "discard the experiment worktree"
+    },
+    applyCommand: "git reset --hard HEAD",
+    devLoopResults: []
+  });
+  assert.equal(review.status, "blocked");
+  assert.match(review.blockers.join("\n"), /unsafe apply command/);
 });

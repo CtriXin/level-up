@@ -12,6 +12,7 @@ import { generateIdeas } from "./ideation.mjs";
 import { generatePrPack } from "./pr-pack.mjs";
 import { runDevLoop } from "./dev-loop.mjs";
 import { generateWorkPack } from "./work-pack.mjs";
+import { runAutopilot } from "./autopilot.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -50,6 +51,7 @@ Usage:
   level-up ideas --run <run-root>
   level-up work-pack --run <run-root>
   level-up dev-loop --run <run-root> --phase baseline|experiment|final [--execute]
+  level-up run --run <run-root> [--execute] [--pr-pack] [--candidate <id>] [--apply-command <cmd>] [--commit-kept] [--rounds <n>]
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
@@ -116,6 +118,22 @@ async function main() {
       runDevLoop(requireValue(args, "run"), {
         phase: requireValue(args, "phase"),
         execute: Boolean(args.execute)
+      })
+    );
+    return;
+  }
+
+  if (command === "run") {
+    print(
+      runAutopilot(requireValue(args, "run"), {
+        execute: Boolean(args.execute),
+        prPack: Boolean(args["pr-pack"]),
+        visual: Boolean(args.visual),
+        force: Boolean(args.force),
+        candidate: args.candidate === true ? null : args.candidate,
+        applyCommand: args["apply-command"] === true ? null : args["apply-command"],
+        commitKept: Boolean(args["commit-kept"]),
+        rounds: args.rounds
       })
     );
     return;
