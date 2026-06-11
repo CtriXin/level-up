@@ -16,6 +16,7 @@ import { runAutopilot } from "./autopilot.mjs";
 import { generateRunnerPacket } from "./runner.mjs";
 import { notifyFeishu } from "./notify.mjs";
 import { generateRunReport } from "./report.mjs";
+import { runRedlineAudit } from "./redline.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -59,6 +60,7 @@ Usage:
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
+  level-up redline --run <run-root> --url <pr-or-mr-url> [--validate] [--notify]
   level-up report --run <run-root> [--format zh] [--link <pr-or-mr-url>] [--notify-status <text>]
   level-up notify --channel feishu --repo <name> --branch <source -> target> --title <title> --link <url> [--dry-run]
   level-up status --run <run-root>
@@ -197,7 +199,15 @@ async function main() {
   }
 
   if (command === "report") {
+    if (args.redline) {
+      runRedlineAudit(requireValue(args, "run"), redlineOptions(args));
+    }
     print(generateRunReport(requireValue(args, "run"), reportOptions(args)));
+    return;
+  }
+
+  if (command === "redline") {
+    print(runRedlineAudit(requireValue(args, "run"), redlineOptions(args)));
     return;
   }
 
@@ -244,6 +254,22 @@ function reportOptions(args) {
     prLink: args["pr-link"] === true ? null : args["pr-link"],
     mrLink: args["mr-link"] === true ? null : args["mr-link"],
     notifyStatus: args["notify-status"] === true ? null : args["notify-status"]
+  };
+}
+
+function redlineOptions(args) {
+  return {
+    url: args.url === true ? null : args.url,
+    link: args.link === true ? null : args.link,
+    prLink: args["pr-link"] === true ? null : args["pr-link"],
+    mrLink: args["mr-link"] === true ? null : args["mr-link"],
+    validate: Boolean(args.validate),
+    notify: Boolean(args.notify),
+    actions: Boolean(args.actions),
+    reportUrl: args["report-url"] === true ? null : args["report-url"],
+    webhookUrl: args["webhook-url"] === true ? null : args["webhook-url"],
+    bin: args["redline-bin"] === true ? null : args["redline-bin"],
+    timeoutMs: args["redline-timeout-ms"] === true ? null : args["redline-timeout-ms"]
   };
 }
 

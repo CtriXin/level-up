@@ -9,6 +9,7 @@ import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { buildFeishuPostPayload, notifyFeishu } from "../src/notify.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
+import { runRedlineAudit } from "../src/redline.mjs";
 import { generateRunReport } from "../src/report.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
 import { generateRunnerPacket } from "../src/runner.mjs";
@@ -315,4 +316,43 @@ test("reviewExperiment blocks unsafe apply commands before keep", () => {
   });
   assert.equal(review.status, "blocked");
   assert.match(review.blockers.join("\n"), /unsafe apply command/);
+});
+
+test("runRedlineAudit writes a redline manifest with adapter result", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Check merge readiness after level-up",
+    metric: "Increase review confidence"
+  });
+  const fakeCli = join(mkdtempSync(join(tmpdir(), "redline-fake-")), "fake-redline.mjs");
+  writeFileSync(fakeCli, `
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const outIndex = process.argv.indexOf("--out");
+const urlIndex = process.argv.indexOf("--url");
+const out = outIndex >= 0 ? process.argv[outIndex + 1] : process.cwd();
+mkdirSync(out, { recursive: true });
+writeFileSync(join(out, "audit-result.json"), JSON.stringify({
+  decision: "mergeable",
+  repo: "fixture",
+  url: urlIndex >= 0 ? process.argv[urlIndex + 1] : ""
+}, null, 2));
+writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
+`);
+  const redline = runRedlineAudit(result.runRoot, {
+    url: "https://github.com/CtriXin/example/pull/1",
+    bin: process.execPath,
+    commandArgs: [fakeCli]
+  });
+  assert.equal(redline.status, "pass");
+  assert.equal(redline.decision, "mergeable");
+  assert.ok(existsSync(redline.files.manifest));
+
+  const report = generateRunReport(result.runRoot, {
+    link: "https://github.com/CtriXin/example/pull/1"
+  });
+  const reportText = readFileSync(report.files.report, "utf8");
+  assert.match(reportText, /Redline Guard 预审/);
+  assert.match(reportText, /mergeable/);
 });
