@@ -14,6 +14,7 @@ import { generateRunReport } from "../src/report.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
 import { generateRunnerPacket } from "../src/runner.mjs";
 import { reviewExperiment } from "../src/self-review.mjs";
+import { selectNextCandidate } from "../src/strategy.mjs";
 import { generateWorkPack } from "../src/work-pack.mjs";
 
 function sh(cwd, command, args) {
@@ -377,6 +378,82 @@ test("runAutopilot adapts after a no-change discard with concrete apply", () => 
   assert.notEqual(second.commit, "0000000");
   assert.ok(existsSync(second.strategy.files.manifest));
   assert.ok(existsSync(second.evaluation.files.manifest));
+});
+
+test("selectNextCandidate generates a validation repair candidate after validation failure", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Generate validation repair candidate",
+    metric: "Increase adaptive validation repair confidence"
+  });
+  const ideas = generateIdeas(result.runRoot);
+  const strategy = selectNextCandidate(result.runRoot, {
+    round: 2,
+    candidates: ideas.candidates,
+    priorResults: [
+      {
+        round: 1,
+        candidateId: "metric-primary-score",
+        decision: "discard",
+        apply: { status: "pass" },
+        validation: [{ phase: "final", status: "fail", executed: true }],
+        evaluation: {
+          checks: {
+            changed: true,
+            applyPassed: true,
+            validationPassed: false,
+            reviewPassed: true
+          },
+          reasons: ["one or more validation phases failed"]
+        }
+      }
+    ]
+  });
+
+  assert.equal(strategy.candidate.id, "adaptive-validation-repair");
+  assert.equal(strategy.manifest.syntheticCandidate, true);
+  assert.equal(strategy.manifest.adaptation.trigger, "validation-failed");
+  assert.equal(strategy.manifest.adaptation.action, "generate-validation-repair-candidate");
+  assert.ok(existsSync(strategy.manifest.files.manifest));
+});
+
+test("selectNextCandidate generates a review blocker repair candidate after review failure", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Generate review blocker repair candidate",
+    metric: "Increase adaptive review repair confidence"
+  });
+  const ideas = generateIdeas(result.runRoot);
+  const strategy = selectNextCandidate(result.runRoot, {
+    round: 2,
+    candidates: ideas.candidates,
+    priorResults: [
+      {
+        round: 1,
+        candidateId: "code-health-simplification",
+        decision: "discard",
+        apply: { status: "pass" },
+        review: { status: "blocked", blockers: ["unsafe apply command"] },
+        evaluation: {
+          checks: {
+            changed: true,
+            applyPassed: true,
+            validationPassed: true,
+            reviewPassed: false
+          },
+          reasons: ["review blocked the experiment: unsafe apply command"]
+        }
+      }
+    ]
+  });
+
+  assert.equal(strategy.candidate.id, "adaptive-review-blocker-repair");
+  assert.equal(strategy.manifest.syntheticCandidate, true);
+  assert.equal(strategy.manifest.adaptation.trigger, "review-blocked");
+  assert.equal(strategy.manifest.adaptation.action, "generate-review-blocker-repair-candidate");
+  assert.ok(existsSync(strategy.manifest.files.manifest));
 });
 
 test("runAutopilot blocks unsafe command apply before it can keep", () => {

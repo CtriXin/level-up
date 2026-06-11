@@ -39,7 +39,7 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 
 - `interview`: lightweight front gate for only high-impact decisions; replaces default `grill-me`.
 - `ideation`: divergent experiment generation.
-- `strategy`: choose the next untried candidate, adapt after failed rounds, and record why.
+- `strategy`: choose the next untried candidate, adapt after failed rounds, generate repair candidates, and record why.
 - `metric`: scoring for performance, UI, tests, code health, or custom goals.
 - `evaluator`: turn apply, validation, review, and worktree delta into keep/discard evidence for the next strategy step.
 - `review`: self-review or review-hub style independent review.
