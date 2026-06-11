@@ -405,7 +405,11 @@ test("runAutopilot executes a validation repair apply after validation failure",
   assert.equal(second.apply.mode, "write-file");
   assert.equal(second.apply.status, "pass");
   assert.equal(second.apply.targetFile, "proof/repair-002-adaptive-validation-repair.md");
-  assert.match(readFileSync(second.apply.targetPath, "utf8"), /Trigger: validation-failed/);
+  const repairDoc = readFileSync(second.apply.targetPath, "utf8");
+  assert.match(repairDoc, /Trigger: validation-failed/);
+  assert.match(repairDoc, /Previous candidate: metric-/);
+  assert.match(repairDoc, /phase: experiment/);
+  assert.match(repairDoc, /command: git diff --check/);
 });
 
 test("runAutopilot executes a review blocker repair apply after self-review blocks", () => {
@@ -435,7 +439,11 @@ test("runAutopilot executes a review blocker repair apply after self-review bloc
   assert.equal(second.apply.mode, "write-file");
   assert.equal(second.apply.status, "pass");
   assert.equal(second.apply.targetFile, "proof/repair-002-adaptive-review-blocker-repair.md");
-  assert.match(readFileSync(second.apply.targetPath, "utf8"), /Trigger: review-blocked/);
+  const repairDoc = readFileSync(second.apply.targetPath, "utf8");
+  assert.match(repairDoc, /Trigger: review-blocked/);
+  assert.match(repairDoc, /Previous candidate: metric-/);
+  assert.match(repairDoc, /blocker:/);
+  assert.doesNotMatch(repairDoc, /ghp_[A-Za-z0-9_]{20,}/);
 });
 
 test("selectNextCandidate generates a validation repair candidate after validation failure", () => {

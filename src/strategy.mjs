@@ -1,5 +1,6 @@
 import { join, resolve } from "node:path";
 import { ensureDir, VERSION, writeJson } from "./runtime.mjs";
+import { buildRepairApply } from "./repair-adapter.mjs";
 
 export function selectNextCandidate(runRootInput, options = {}) {
   const runRoot = resolve(runRootInput);
@@ -68,10 +69,7 @@ function buildAdaptation(lastResult) {
       trigger: "validation-failed",
       action: "generate-validation-repair-candidate",
       reason: "previous validation failed; next candidate should repair the validation path before broader mutation",
-      apply: repairApply(
-        "validation-failed",
-        "The previous round failed validation. This artifact proves the repair candidate took over the apply step before broader mutation."
-      ),
+      apply: buildRepairApply("validation-failed", lastResult),
       candidate: repairCandidate({
         id: "adaptive-validation-repair",
         title: "Repair validation failure before continuing",
@@ -88,10 +86,7 @@ function buildAdaptation(lastResult) {
       trigger: "review-blocked",
       action: "generate-review-blocker-repair-candidate",
       reason: "self-review blocked the previous experiment; next candidate should address the blocker directly",
-      apply: repairApply(
-        "review-blocked",
-        "The previous round was blocked by self-review. This artifact proves the repair candidate took over the apply step before broader mutation."
-      ),
+      apply: buildRepairApply("review-blocked", lastResult),
       candidate: repairCandidate({
         id: "adaptive-review-blocker-repair",
         title: "Address self-review blocker",
@@ -107,23 +102,6 @@ function buildAdaptation(lastResult) {
     trigger: "discarded",
     action: "switch-candidate",
     reason: "previous round was discarded; try another candidate"
-  };
-}
-
-function repairApply(trigger, body) {
-  return {
-    mode: "write-file",
-    targetFile: "proof/repair-{roundPadded}-{candidateId}.md",
-    content: [
-      "# Adaptive repair candidate",
-      "",
-      `Trigger: ${trigger}`,
-      "Round: {round}",
-      "Candidate: {candidateId}",
-      "",
-      body,
-      ""
-    ].join("\n")
   };
 }
 
