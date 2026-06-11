@@ -1,0 +1,4 @@
+node_modules/
+.level-up/
+*.log
+.DS_Store

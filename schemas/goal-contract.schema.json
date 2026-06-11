@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/goal-contract.schema.json",
+  "title": "LevelUpGoalContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "runId",
+    "createdAt",
+    "target",
+    "objective",
+    "mode",
+    "primaryMetric",
+    "guardrails",
+    "stopConditions",
+    "humanGates"
+  ],
+  "properties": {
+    "version": { "type": "string" },
+    "runId": { "type": "string" },
+    "createdAt": { "type": "string" },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" },
+        "head": { "type": "string" },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "objective": { "type": "string", "minLength": 1 },
+    "mode": {
+      "type": "string",
+      "enum": ["l1-assisted", "l2-local-keeper", "l3-local-autopilot"]
+    },
+    "primaryMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "direction"],
+      "properties": {
+        "name": { "type": "string" },
+        "direction": { "type": "string", "enum": ["increase", "decrease"] },
+        "description": { "type": "string" }
+      }
+    },
+    "guardrails": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "nonGoals": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "forbiddenActions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "stopConditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxRounds", "maxMinutesPerRound"],
+      "properties": {
+        "maxRounds": { "type": "integer", "minimum": 1 },
+        "maxMinutesPerRound": { "type": "integer", "minimum": 1 },
+        "maxNoImprovementRounds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "humanGates": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

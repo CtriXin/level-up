@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/ledger.schema.json",
+  "title": "LevelUpLedgerEntry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runId", "round", "status", "description", "createdAt"],
+  "properties": {
+    "runId": { "type": "string" },
+    "round": { "type": "integer", "minimum": 1 },
+    "commit": { "type": "string" },
+    "score": { "type": "number" },
+    "status": { "type": "string", "enum": ["keep", "discard", "crash"] },
+    "description": { "type": "string" },
+    "createdAt": { "type": "string" }
+  }
+}

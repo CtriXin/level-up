@@ -1,0 +1,17 @@
+{
+  "name": "@ctrixin/level-up",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "level-up": "./src/cli.mjs"
+  },
+  "scripts": {
+    "level-up": "node src/cli.mjs",
+    "check": "node --check src/cli.mjs && node --check src/runtime.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
