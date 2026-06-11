@@ -134,6 +134,8 @@ npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id> \
 
 `redline` is an optional adapter. It first looks for a configured `--redline-bin` or `LEVEL_UP_REDLINE_BIN`, then a sibling `../redline-guard/src/cli.mjs`, then `redline-guard` on PATH. If none exists, the run records `skipped` instead of failing the L3 loop.
 
+When `level-up` calls `redline-guard`, it automatically passes the current run root as evidence. The redline report can then include goal, ledger, validation, self-review, and visual evidence links without manual relay.
+
 ```bash
 npm run level-up -- notify \
   --channel feishu \

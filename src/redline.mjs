@@ -23,6 +23,7 @@ export function runRedlineAudit(runRootInput, options = {}) {
     files: {
       resultJson: join(outputDir, "audit-result.json"),
       resultMarkdown: join(outputDir, "audit-result.md"),
+      evidenceSummary: join(outputDir, "evidence-summary.json"),
       manifest: join(outputDir, "manifest.json")
     }
   };
@@ -49,6 +50,7 @@ export function runRedlineAudit(runRootInput, options = {}) {
     "--out",
     outputDir
   ];
+  if (options.evidence !== false) auditArgs.push("--evidence", runRoot);
   if (options.validate) auditArgs.push("--validate");
   if (options.notify) auditArgs.push("--notify");
   if (options.actions) auditArgs.push("--actions");

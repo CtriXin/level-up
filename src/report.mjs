@@ -267,6 +267,9 @@ function renderArtifacts({ runRoot, workPack, runner, prPack, redline }) {
   if (redline?.files?.manifest) {
     lines.push(`- redline manifest: \`${redline.files.manifest}\``);
   }
+  if (redline?.files?.evidenceSummary) {
+    lines.push(`- redline evidence: \`${redline.files.evidenceSummary}\``);
+  }
   return lines.join("\n");
 }
 

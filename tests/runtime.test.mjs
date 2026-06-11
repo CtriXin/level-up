@@ -422,6 +422,8 @@ writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
   assert.equal(redline.status, "pass");
   assert.equal(redline.decision, "mergeable");
   assert.ok(existsSync(redline.files.manifest));
+  assert.match(redline.command, /--evidence/);
+  assert.match(redline.files.evidenceSummary, /evidence-summary\.json$/);
 
   const report = generateRunReport(result.runRoot, {
     link: "https://github.com/CtriXin/example/pull/1"
