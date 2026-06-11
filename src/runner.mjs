@@ -157,9 +157,10 @@ ${candidate ? `- id: \`${candidate.id}\`
 
 1. Work only inside the experiment worktree.
 2. Make the smallest useful experiment for the selected candidate.
-3. Do not merge, deploy, force-push, change global config, access secrets, or mutate production data.
-4. After mutation, let \`level-up run\` or \`level-up dev-loop\` execute validation and self-review.
-5. If the runner cannot safely act, leave the worktree unchanged and report a blocker.
+3. Prefer structured apply inputs when possible: \`--apply-patch\`, \`--apply-write-file\`, or a narrow \`--apply-command\`.
+4. Do not merge, deploy, force-push, change global config, access secrets, or mutate production data.
+5. After mutation, let \`level-up run\` or \`level-up dev-loop\` execute validation and self-review.
+6. If the runner cannot safely act, leave the worktree unchanged and report a blocker.
 
 ## References
 
