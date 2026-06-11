@@ -5,11 +5,19 @@ description: Composable autoresearch runtime: L3 local autopilot, worktree exper
 
 # level-up Skill
 
-Use this skill to `level-up` a project, run `autoresearch-lite`, or let an agent experiment locally until a measurable goal improves.
+Use this skill to `level-up` a project, run `autoresearch-lite`, or let an agent experiment locally until a measurable goal improves. The default entry is natural language, not manual CLI usage.
+
+Example trigger:
+
+```text
+用 level-up 升级 /path/to/project，目标是优化首页加载速度和事件逻辑。
+```
+
+When triggered this way, the agent owns init, scan, interview when needed, runner/worktree setup, experiments, validation, PR/MR creation, Feishu notification when configured, and the final Chinese run report.
 
 ## Contract
 
-`level-up` is a thin core loop with optional slots. Do not turn it into a giant skill. Use the runtime protocol and attach only the slots needed for the goal.
+`level-up` is a thin core loop with optional slots. Do not turn it into a giant skill. Use runtime protocol and attach only the slots needed for the goal.
 
 ## Default Flow
 
@@ -23,8 +31,9 @@ Use this skill to `level-up` a project, run `autoresearch-lite`, or let an agent
 8. Run one experiment per round.
 9. Validate through dev-loop phases, evaluate, review, then keep/discard/crash.
 10. Record every result in the ledger.
-11. Generate a PR packet with PR body, bug-review request, and visual evidence checklist.
-12. Stop before merge, deploy, or irreversible actions.
+11. Generate a PR/MR packet with PR body, bug-review request, and visual evidence checklist.
+12. Generate `REPORT.zh.md` so the user can understand what happened without reading raw artifacts.
+13. Stop before merge, deploy, or irreversible actions.
 
 ## Hard Gates
 
@@ -39,21 +48,26 @@ Use this skill to `level-up` a project, run `autoresearch-lite`, or let an agent
 Every slot is optional, but every skip is explicit:
 
 ```text
-slot skipped: <name>
-reason: <why safe>
-assumption: <what>
-risk_if_wrong: <impact>
-revisit_trigger: <when to ask again>
+slot skipped: <name> reason: <why safe> assumption: <what> risk_if_wrong: <impact> revisit_trigger: <when to ask again>
 ```
+
+## Agent-First Behavior
+
+- Prefer the user's natural-language goal over asking for CLI commands.
+- Ask 1-3 questions only when the answer changes objective, metric, guardrail, irreversible scope, or human gate.
+- If the user says `你定`, `先做`, `defaults`, or gives a narrow target, proceed with conservative defaults.
+- Create PR/MR and Feishu notification when the repo/provider is available and the run produced useful changes.
+- Always leave a Chinese report at `REPORT.zh.md` under the run root.
 
 ## Fallback CLI
 
-The repository includes a dependency-free local runner:
+The repository includes a dependency-free local runner. These commands are for debugging or manual control; the agent should usually run them itself.
 
 ```bash
 npm run level-up -- init --target /path/to/repo --goal "..." --metric "..."
 npm run level-up -- runner-pack --run /path/to/repo/.level-up/runs/<run-id> --runner current-session
-npm run level-up -- run --run /path/to/repo/.level-up/runs/<run-id> --execute --pr-pack
+npm run level-up -- run --run /path/to/repo/.level-up/runs/<run-id> --execute --pr-pack --report
+npm run level-up -- report --run /path/to/repo/.level-up/runs/<run-id> --link <pr-or-mr-url> --notify-status "Feishu 已通知"
 npm run level-up -- scan --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- ideas --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- work-pack --run /path/to/repo/.level-up/runs/<run-id>

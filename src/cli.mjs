@@ -15,6 +15,7 @@ import { generateWorkPack } from "./work-pack.mjs";
 import { runAutopilot } from "./autopilot.mjs";
 import { generateRunnerPacket } from "./runner.mjs";
 import { notifyFeishu } from "./notify.mjs";
+import { generateRunReport } from "./report.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -58,6 +59,7 @@ Usage:
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
+  level-up report --run <run-root> [--format zh] [--link <pr-or-mr-url>] [--notify-status <text>]
   level-up notify --channel feishu --repo <name> --branch <source -> target> --title <title> --link <url> [--dry-run]
   level-up status --run <run-root>
 
@@ -143,8 +145,8 @@ async function main() {
   }
 
   if (command === "run") {
-    print(
-      runAutopilot(requireValue(args, "run"), {
+    const runRoot = requireValue(args, "run");
+    const summary = runAutopilot(runRoot, {
         execute: Boolean(args.execute),
         prPack: Boolean(args["pr-pack"]),
         visual: Boolean(args.visual),
@@ -158,8 +160,11 @@ async function main() {
         tools: args.tools,
         commitKept: Boolean(args["commit-kept"]),
         rounds: args.rounds
-      })
-    );
+    });
+    if (args.report) {
+      summary.report = generateRunReport(runRoot, reportOptions(args));
+    }
+    print(summary);
     return;
   }
 
@@ -188,6 +193,11 @@ async function main() {
         reviewerBot: args["reviewer-bot"] === true ? null : args["reviewer-bot"]
       })
     );
+    return;
+  }
+
+  if (command === "report") {
+    print(generateRunReport(requireValue(args, "run"), reportOptions(args)));
     return;
   }
 
@@ -225,6 +235,16 @@ async function main() {
   }
 
   throw new Error(`Unknown command: ${command}`);
+}
+
+function reportOptions(args) {
+  return {
+    format: args.format === true ? "zh" : args.format,
+    link: args.link === true ? null : args.link,
+    prLink: args["pr-link"] === true ? null : args["pr-link"],
+    mrLink: args["mr-link"] === true ? null : args["mr-link"],
+    notifyStatus: args["notify-status"] === true ? null : args["notify-status"]
+  };
 }
 
 main().catch((error) => {
