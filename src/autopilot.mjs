@@ -17,6 +17,8 @@ import { generateWorkPack } from "./work-pack.mjs";
 import { reviewExperiment } from "./self-review.mjs";
 import { generateRunnerPacket } from "./runner.mjs";
 import { runApplyStep } from "./apply.mjs";
+import { evaluateExperiment } from "./evaluator.mjs";
+import { selectNextCandidate } from "./strategy.mjs";
 
 export function runAutopilot(runRootInput, options = {}) {
   const runRoot = resolve(runRootInput);
@@ -30,11 +32,17 @@ export function runAutopilot(runRootInput, options = {}) {
     const state = readJson(join(runRoot, "state.json"));
     const round = Number(options.round ?? state.currentRound + 1);
     const ideas = readJson(join(runRoot, "ideas.json"));
-    const candidate = selectCandidate(ideas.candidates, options.candidate);
+    const strategy = selectNextCandidate(runRoot, {
+      round,
+      candidates: ideas.candidates,
+      requestedId: options.candidate,
+      priorResults: results
+    });
     const experiment = runRound({
       runRoot,
       round,
-      candidate,
+      candidate: strategy.candidate,
+      strategy: strategy.manifest,
       worktreePath: worktree.worktreePath,
       applyCommand: options.applyCommand,
       applyPatch: options.applyPatch,
@@ -82,28 +90,11 @@ function ensureRunInputs(runRoot, goal) {
   }
 }
 
-function selectCandidate(candidates, requestedId) {
-  if (!Array.isArray(candidates) || candidates.length === 0) {
-    throw new Error("No candidates available. Run ideas first.");
-  }
-  if (requestedId) {
-    const found = candidates.find((candidate) => candidate.id === requestedId);
-    if (!found) {
-      throw new Error(`Candidate not found: ${requestedId}`);
-    }
-    return found;
-  }
-  return (
-    candidates.find((candidate) => candidate.id.startsWith("metric-"))
-    || candidates.find((candidate) => candidate.id === "guardrail-hardening")
-    || candidates[0]
-  );
-}
-
 function runRound({
   runRoot,
   round,
   candidate,
+  strategy,
   worktreePath,
   applyCommand,
   applyPatch,
@@ -120,12 +111,20 @@ function runRound({
 }) {
   const experimentDir = join(runRoot, "experiments", `round-${String(round).padStart(3, "0")}`);
   ensureDir(experimentDir);
+  const templateValues = applyTemplateValues({ round, candidate });
+  const resolvedApply = {
+    applyCommand: renderTemplate(applyCommand, templateValues),
+    applyPatch: renderTemplate(applyPatch, templateValues),
+    applyWriteFile: renderTemplate(applyWriteFile, templateValues),
+    applyContent: renderTemplate(applyContent, templateValues),
+    applyContentFile: renderTemplate(applyContentFile, templateValues)
+  };
   writeExperimentMarkdown(join(experimentDir, "EXPERIMENT.md"), {
     round,
     candidate,
-    applyCommand,
-    applyPatch,
-    applyWriteFile,
+    applyCommand: resolvedApply.applyCommand,
+    applyPatch: resolvedApply.applyPatch,
+    applyWriteFile: resolvedApply.applyWriteFile,
     execute
   });
 
@@ -144,11 +143,7 @@ function runRound({
     round,
     candidate,
     worktreePath,
-    applyCommand,
-    applyPatch,
-    applyWriteFile,
-    applyContent,
-    applyContentFile
+    ...resolvedApply
   });
   const experimentPhase = runDevLoop(runRoot, { phase: "experiment", execute });
   const finalPhase = runDevLoop(runRoot, { phase: "final", execute });
@@ -159,33 +154,39 @@ function runRound({
     applyCommand,
     devLoopResults: [experimentPhase, finalPhase]
   });
-  const changed = after.length > 0 || before !== after;
-  const validationPassed = [experimentPhase, finalPhase].every((phase) => phase.status === "pass" || (!execute && phase.status === "planned"));
-  const applyPassed = apply.status === "pass" || apply.status === "skipped";
-  const decision = changed && validationPassed && applyPassed && review.status !== "blocked" ? "keep" : "discard";
-  const commit = decision === "keep" && commitKept ? commitExperiment(worktreePath, candidate) : "0000000";
-  const score = decision === "keep" ? 1 : 0;
+  const changed = after.length > 0 && before !== after;
+  const evaluation = evaluateExperiment(runRoot, {
+    round,
+    candidate,
+    changed,
+    apply,
+    validation: [experimentPhase, finalPhase],
+    review
+  });
+  const commit = evaluation.decision === "keep" && commitKept ? commitExperiment(worktreePath, candidate) : "0000000";
 
   const result = {
     version: VERSION,
     round,
     candidateId: candidate.id,
-    decision,
-    score,
+    decision: evaluation.decision,
+    score: evaluation.score,
     commit,
     changed,
+    strategy,
     runner: runnerPacket,
     apply,
     validation: [experimentPhase, finalPhase],
+    evaluation,
     review
   };
   writeJson(join(experimentDir, "result.json"), result);
   appendLedger(runRoot, {
     round,
-    status: decision,
-    score,
+    status: evaluation.decision,
+    score: evaluation.score,
     commit,
-    description: `${candidate.title}: ${decision}`
+    description: `${candidate.title}: ${evaluation.decision}`
   });
   return result;
 }
@@ -238,6 +239,21 @@ function renderApplyIntent({ applyCommand, applyPatch, applyWriteFile }) {
     return `mode: write-file\n\n\`${applyWriteFile}\``;
   }
   return "_No apply input supplied. The agent or adapter must modify the worktree before this can keep._";
+}
+
+function applyTemplateValues({ round, candidate }) {
+  return {
+    round: String(round),
+    roundPadded: String(round).padStart(3, "0"),
+    candidateId: candidate.id
+  };
+}
+
+function renderTemplate(value, replacements) {
+  if (value === undefined || value === null) {
+    return value;
+  }
+  return String(value).replace(/\{(round|roundPadded|candidateId)\}/g, (_, key) => replacements[key]);
 }
 
 function getWorktreeStatus(worktreePath) {

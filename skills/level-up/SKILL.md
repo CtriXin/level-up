@@ -28,12 +28,13 @@ When triggered this way, the agent owns init, scan, interview when needed, runne
 5. Generate a work pack with SPEC and TODO artifacts.
 6. Create an isolated experiment worktree.
 7. Generate a runner packet. Default runner is the current agent session; future runners may be `opencode-profile`, `mms-runner`, or `external-command`.
-8. Run one experiment per round through the apply adapter when possible: command, patch, or file-write.
-9. Validate through dev-loop phases, evaluate, review, then keep/discard/crash.
-10. Record every result in the ledger.
-11. Generate a PR/MR packet with PR body, bug-review request, and visual evidence checklist.
-12. Generate `REPORT.zh.md` so the user can understand what happened without reading raw artifacts.
-13. Stop before merge, deploy, or irreversible actions.
+8. Select the next candidate with the strategy slot; prefer an untried high-priority candidate.
+9. Run one experiment per round through the apply adapter when possible: command, patch, or file-write.
+10. Validate through dev-loop phases, evaluate, review, then keep/discard/crash.
+11. Record every result in the ledger.
+12. Generate a PR/MR packet with PR body, bug-review request, and visual evidence checklist.
+13. Generate `REPORT.zh.md` so the user can understand what happened without reading raw artifacts.
+14. Stop before merge, deploy, or irreversible actions.
 
 ## Hard Gates
 
