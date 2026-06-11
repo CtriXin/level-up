@@ -26,7 +26,8 @@ skill. Use the runtime protocol and attach only the slots needed for the goal.
 6. Run one experiment per round.
 7. Validate, evaluate, review, then keep/discard/crash.
 8. Record every result in the ledger.
-9. Stop before merge, deploy, or irreversible actions.
+9. Generate a PR packet with PR body, bug-review request, and visual evidence checklist.
+10. Stop before merge, deploy, or irreversible actions.
 
 ## Hard Gates
 
@@ -58,4 +59,5 @@ npm run level-up -- scan --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- ideas --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- worktree --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- record --run /path/to/repo/.level-up/runs/<run-id> --status keep --score 1 --description "..."
+npm run level-up -- pr-pack --run /path/to/repo/.level-up/runs/<run-id> --visual
 ```

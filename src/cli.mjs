@@ -9,6 +9,7 @@ import {
   scanTarget
 } from "./runtime.mjs";
 import { generateIdeas } from "./ideation.mjs";
+import { generatePrPack } from "./pr-pack.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -47,6 +48,7 @@ Usage:
   level-up ideas --run <run-root>
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
+  level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
   level-up status --run <run-root>
 
 L3 local autopilot stops before merge, deploy, and irreversible actions.`;
@@ -113,6 +115,16 @@ async function main() {
         description: requireValue(args, "description"),
         commit: args.commit,
         round: args.round
+      })
+    );
+    return;
+  }
+
+  if (command === "pr-pack") {
+    print(
+      generatePrPack(requireValue(args, "run"), {
+        visual: Boolean(args.visual),
+        reviewerBot: args["reviewer-bot"] === true ? null : args["reviewer-bot"]
       })
     );
     return;

@@ -82,6 +82,12 @@ npm run level-up -- record --run /path/to/project/.level-up/runs/<run-id> \
   --status keep --score 84.2 --description "Lazy-load non-critical hero media"
 ```
 
+Generate a PR packet:
+
+```bash
+npm run level-up -- pr-pack --run /path/to/project/.level-up/runs/<run-id> --visual
+```
+
 The CLI is only the fallback renderer. The durable contract is the files under
 `.level-up/runs/<run-id>/`.
 

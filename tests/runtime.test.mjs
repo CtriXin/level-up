@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { generateIdeas } from "../src/ideation.mjs";
+import { generatePrPack } from "../src/pr-pack.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
 
 function sh(cwd, command, args) {
@@ -59,6 +60,16 @@ test("createRun writes a goal contract and ready state", () => {
   assert.equal(result.state.status, "ready");
 });
 
+test("createRun normalizes long metric names for readable packets", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Improve packet readability",
+    metric: "Increase runtime usefulness by adding candidate generation while keeping tests and schemas passing"
+  });
+  assert.equal(result.goal.primaryMetric.name.endsWith("_"), false);
+});
+
 test("scanTarget detects package scripts and frameworks", () => {
   const repo = fixtureRepo();
   const scan = scanTarget(repo);
@@ -101,4 +112,29 @@ test("generateIdeas writes structured experiment candidates", () => {
   assert.ok(ideas.candidates.length >= 3);
   assert.equal(ideas.candidates[0].id, "baseline-validation");
   assert.equal(ideas.candidates[0].validation[0].command, "npm run check");
+});
+
+test("generatePrPack writes PR body, bug review, and visual evidence artifacts", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Improve homepage visual performance",
+    metric: "Increase confidence"
+  });
+  scanTarget(repo, result.runRoot);
+  generateIdeas(result.runRoot);
+  appendLedger(result.runRoot, {
+    status: "keep",
+    score: 1,
+    commit: "abc1234",
+    description: "kept a useful local experiment"
+  });
+  const pack = generatePrPack(result.runRoot, {
+    visual: true,
+    reviewerBot: "@review-bot"
+  });
+  assert.equal(pack.visualMode, true);
+  assert.match(pack.files.prBody, /PR_BODY\.md$/);
+  assert.match(pack.files.bugReview, /BUG_REVIEW_REQUEST\.md$/);
+  assert.match(pack.files.visualEvidence, /VISUAL_EVIDENCE\.md$/);
 });

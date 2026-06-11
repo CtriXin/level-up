@@ -216,10 +216,14 @@ export function parseMetric(metric) {
     ? "decrease"
     : "increase";
   return {
-    name: slugify(description).replace(/-/g, "_").slice(0, 64) || "primary_score",
+    name: metricName(description),
     direction,
     description
   };
+}
+
+function metricName(description) {
+  return slugify(description).replace(/-/g, "_").slice(0, 64).replace(/^_+|_+$/g, "") || "primary_score";
 }
 
 export function scanTarget(targetInput, runRoot) {
