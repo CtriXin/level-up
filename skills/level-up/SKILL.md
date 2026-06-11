@@ -22,12 +22,13 @@ skill. Use the runtime protocol and attach only the slots needed for the goal.
 3. Use the interview slot only for decisions that cannot be safely inferred.
 4. Generate experiment candidates with hypothesis, expected impact, risk,
    validation, and rollback plan.
-5. Create an isolated experiment worktree.
-6. Run one experiment per round.
-7. Validate, evaluate, review, then keep/discard/crash.
-8. Record every result in the ledger.
-9. Generate a PR packet with PR body, bug-review request, and visual evidence checklist.
-10. Stop before merge, deploy, or irreversible actions.
+5. Generate a work pack with SPEC and TODO artifacts.
+6. Create an isolated experiment worktree.
+7. Run one experiment per round.
+8. Validate through dev-loop phases, evaluate, review, then keep/discard/crash.
+9. Record every result in the ledger.
+10. Generate a PR packet with PR body, bug-review request, and visual evidence checklist.
+11. Stop before merge, deploy, or irreversible actions.
 
 ## Hard Gates
 
@@ -57,6 +58,8 @@ The repository includes a dependency-free local runner:
 npm run level-up -- init --target /path/to/repo --goal "..." --metric "..."
 npm run level-up -- scan --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- ideas --run /path/to/repo/.level-up/runs/<run-id>
+npm run level-up -- work-pack --run /path/to/repo/.level-up/runs/<run-id>
+npm run level-up -- dev-loop --run /path/to/repo/.level-up/runs/<run-id> --phase baseline
 npm run level-up -- worktree --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- record --run /path/to/repo/.level-up/runs/<run-id> --status keep --score 1 --description "..."
 npm run level-up -- pr-pack --run /path/to/repo/.level-up/runs/<run-id> --visual

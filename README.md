@@ -69,10 +69,23 @@ Generate structured experiment candidates:
 npm run level-up -- ideas --run /path/to/project/.level-up/runs/<run-id>
 ```
 
+Generate a reviewable work pack:
+
+```bash
+npm run level-up -- work-pack --run /path/to/project/.level-up/runs/<run-id>
+```
+
 Create an isolated experiment worktree:
 
 ```bash
 npm run level-up -- worktree --run /path/to/project/.level-up/runs/<run-id>
+```
+
+Run dev-loop phases:
+
+```bash
+npm run level-up -- dev-loop --run /path/to/project/.level-up/runs/<run-id> --phase baseline
+npm run level-up -- dev-loop --run /path/to/project/.level-up/runs/<run-id> --phase final --execute
 ```
 
 Record an experiment result:
