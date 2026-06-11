@@ -13,6 +13,7 @@ import { generatePrPack } from "./pr-pack.mjs";
 import { runDevLoop } from "./dev-loop.mjs";
 import { generateWorkPack } from "./work-pack.mjs";
 import { runAutopilot } from "./autopilot.mjs";
+import { generateRunnerPacket } from "./runner.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -50,8 +51,9 @@ Usage:
   level-up scan --run <run-root>
   level-up ideas --run <run-root>
   level-up work-pack --run <run-root>
+  level-up runner-pack --run <run-root> [--runner current-session|opencode-profile|mms-runner|external-command] [--runner-profile <name>]
   level-up dev-loop --run <run-root> --phase baseline|experiment|final [--execute]
-  level-up run --run <run-root> [--execute] [--pr-pack] [--candidate <id>] [--apply-command <cmd>] [--commit-kept] [--rounds <n>]
+  level-up run --run <run-root> [--execute] [--pr-pack] [--runner <type>] [--runner-profile <name>] [--candidate <id>] [--apply-command <cmd>] [--commit-kept] [--rounds <n>]
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
@@ -113,6 +115,21 @@ async function main() {
     return;
   }
 
+  if (command === "runner-pack") {
+    print(
+      generateRunnerPacket(requireValue(args, "run"), {
+        runner: args.runner === true ? null : args.runner,
+        profile: args["runner-profile"] === true ? null : args["runner-profile"],
+        candidate: args.candidate === true ? null : args.candidate,
+        worktreePath: args.worktree === true ? null : args.worktree,
+        skills: args.skills,
+        mcp: args.mcp,
+        tools: args.tools
+      })
+    );
+    return;
+  }
+
   if (command === "dev-loop") {
     print(
       runDevLoop(requireValue(args, "run"), {
@@ -132,6 +149,11 @@ async function main() {
         force: Boolean(args.force),
         candidate: args.candidate === true ? null : args.candidate,
         applyCommand: args["apply-command"] === true ? null : args["apply-command"],
+        runner: args.runner === true ? null : args.runner,
+        runnerProfile: args["runner-profile"] === true ? null : args["runner-profile"],
+        skills: args.skills,
+        mcp: args.mcp,
+        tools: args.tools,
         commitKept: Boolean(args["commit-kept"]),
         rounds: args.rounds
       })

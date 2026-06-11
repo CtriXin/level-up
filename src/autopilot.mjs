@@ -16,6 +16,7 @@ import {
 import { runDevLoop } from "./dev-loop.mjs";
 import { generateWorkPack } from "./work-pack.mjs";
 import { reviewExperiment } from "./self-review.mjs";
+import { generateRunnerPacket } from "./runner.mjs";
 
 export function runAutopilot(runRootInput, options = {}) {
   const runRoot = resolve(runRootInput);
@@ -36,6 +37,11 @@ export function runAutopilot(runRootInput, options = {}) {
       candidate,
       worktreePath: worktree.worktreePath,
       applyCommand: options.applyCommand,
+      runner: options.runner,
+      runnerProfile: options.runnerProfile,
+      skills: options.skills,
+      mcp: options.mcp,
+      tools: options.tools,
       execute: Boolean(options.execute),
       commitKept: Boolean(options.commitKept)
     });
@@ -90,11 +96,20 @@ function selectCandidate(candidates, requestedId) {
   );
 }
 
-function runRound({ runRoot, round, candidate, worktreePath, applyCommand, execute, commitKept }) {
+function runRound({ runRoot, round, candidate, worktreePath, applyCommand, runner, runnerProfile, skills, mcp, tools, execute, commitKept }) {
   const experimentDir = join(runRoot, "experiments", `round-${String(round).padStart(3, "0")}`);
   ensureDir(experimentDir);
   writeExperimentMarkdown(join(experimentDir, "EXPERIMENT.md"), { round, candidate, applyCommand, execute });
 
+  const runnerPacket = generateRunnerPacket(runRoot, {
+    runner,
+    profile: runnerProfile,
+    candidate: candidate.id,
+    worktreePath,
+    skills,
+    mcp,
+    tools
+  });
   const before = getWorktreeStatus(worktreePath);
   const apply = applyCommand ? runShell(worktreePath, applyCommand) : null;
   const experimentPhase = runDevLoop(runRoot, { phase: "experiment", execute });
@@ -121,6 +136,7 @@ function runRound({ runRoot, round, candidate, worktreePath, applyCommand, execu
     score,
     commit,
     changed,
+    runner: runnerPacket,
     apply,
     validation: [experimentPhase, finalPhase],
     review
