@@ -9,6 +9,7 @@ import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { buildFeishuPostPayload, notifyFeishu } from "../src/notify.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
+import { generateRunReport } from "../src/report.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
 import { generateRunnerPacket } from "../src/runner.mjs";
 import { reviewExperiment } from "../src/self-review.mjs";
@@ -199,6 +200,43 @@ test("generatePrPack writes PR body, bug review, and visual evidence artifacts",
   assert.match(pack.files.visualEvidence, /VISUAL_EVIDENCE\.md$/);
   assert.match(readFileSync(pack.files.prBody, "utf8"), /## Work Pack/);
   assert.match(readFileSync(pack.files.prBody, "utf8"), /## Dev Loop/);
+});
+
+test("generateRunReport writes a readable Chinese run summary", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Explain what level-up did after an autopilot run",
+    metric: "Increase user-readable traceability"
+  });
+  scanTarget(repo, result.runRoot);
+  generateIdeas(result.runRoot);
+  generateWorkPack(result.runRoot);
+  generateRunnerPacket(result.runRoot, {
+    runner: "current-session",
+    profile: "codex-session",
+    skills: "level-up,interview"
+  });
+  runDevLoop(result.runRoot, { phase: "baseline" });
+  appendLedger(result.runRoot, {
+    status: "keep",
+    score: 1,
+    commit: "abc1234",
+    description: "kept a useful local experiment"
+  });
+  generatePrPack(result.runRoot, { visual: true });
+
+  const report = generateRunReport(result.runRoot, {
+    link: "https://github.com/CtriXin/level-up/pull/6",
+    notifyStatus: "Feishu 已通知"
+  });
+  const body = readFileSync(report.files.report, "utf8");
+
+  assert.match(report.files.report, /REPORT\.zh\.md$/);
+  assert.match(body, /## 做了什么/);
+  assert.match(body, /## PR \/ MR/);
+  assert.match(body, /Feishu 已通知/);
+  assert.match(body, /kept a useful local experiment/);
 });
 
 test("buildFeishuPostPayload includes model, repo, and branch for quick triage", () => {

@@ -30,7 +30,7 @@ L3 local autopilot cannot:
 ## Core Loop
 
 ```text
-interview -> goal contract -> strategy -> worktree experiment -> validation -> evaluator -> review -> keep/discard/crash -> ledger -> PR packet
+interview -> goal contract -> strategy -> worktree experiment -> validation -> evaluator -> review -> keep/discard/crash -> ledger -> PR/MR packet -> Chinese run report
 ```
 
 ## Capability Slots
@@ -48,6 +48,14 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 
 ## Quick Start
 
+Preferred agent-facing entry:
+
+```text
+用 level-up 升级 /path/to/project，目标是优化首页加载速度和事件逻辑。
+```
+
+The agent should inspect the target repo, ask only blocking questions, create the run contract, use isolated worktrees, run validation, keep/discard experiments, open a PR/MR when there is a useful change, notify Feishu when configured, and leave a Chinese report for the user. The user should not need to manually drive the CLI.
+
 Initialize a run for a local project:
 
 ```bash
@@ -63,6 +71,22 @@ npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> --execute
 ```
 
 `level-up run` ensures scan, ideas, work-pack, baseline validation, an isolated worktree, experiment/final validation, deterministic self-review, ledger recording, and optional PR evidence. If the round makes no change or fails validation/review, it records `discard` instead of pretending the attempt worked.
+
+Generate the same loop with a user-readable Chinese report:
+
+```bash
+npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> --execute --pr-pack --report
+```
+
+Generate or refresh a report for an existing run:
+
+```bash
+npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id> \
+  --link "https://github.com/org/repo/pull/123" \
+  --notify-status "Feishu 已通知"
+```
+
+The report is written to `REPORT.zh.md` inside the run root and summarizes what happened, why, experiment results, metric evidence, validation, PR/MR links, Feishu status, and next step.
 
 Generate a runner packet for the current session or a future model process:
 
@@ -103,6 +127,7 @@ npm run level-up -- dev-loop --run /path/to/project/.level-up/runs/<run-id> --ph
 npm run level-up -- dev-loop --run /path/to/project/.level-up/runs/<run-id> --phase final --execute
 npm run level-up -- record --run /path/to/project/.level-up/runs/<run-id> --status keep --score 84.2 --description "Lazy-load non-critical hero media"
 npm run level-up -- pr-pack --run /path/to/project/.level-up/runs/<run-id> --visual
+npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id>
 ```
 
 The CLI is only the fallback renderer. The durable contract is the files under `.level-up/runs/<run-id>/`.
