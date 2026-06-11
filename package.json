@@ -8,7 +8,7 @@
   },
   "scripts": {
     "level-up": "node src/cli.mjs",
-    "check": "node --check src/cli.mjs && node --check src/runtime.mjs && node --check src/ideation.mjs && node --check src/pr-pack.mjs && node --check src/work-pack.mjs && node --check src/dev-loop.mjs && node --check src/autopilot.mjs && node --check src/self-review.mjs && node --check src/runner.mjs && node --check src/notify.mjs && node --check src/report.mjs && node --check src/apply.mjs",
+    "check": "node --check src/cli.mjs && node --check src/runtime.mjs && node --check src/ideation.mjs && node --check src/pr-pack.mjs && node --check src/work-pack.mjs && node --check src/dev-loop.mjs && node --check src/autopilot.mjs && node --check src/self-review.mjs && node --check src/runner.mjs && node --check src/notify.mjs && node --check src/report.mjs && node --check src/redline.mjs && node --check src/apply.mjs",
     "test": "node --test"
   },
   "engines": {

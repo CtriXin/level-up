@@ -28,6 +28,7 @@ Then a repo may attach one or more review adapters:
 - `github-codeowners`: rely on CODEOWNERS and branch protection.
 - `github-actions`: run deterministic CI and optional review scripts.
 - `review-hub`: open a local/multi-model review slot.
+- `redline-guard`: run merge-readiness audit after PR/MR creation and attach the result to the level-up report.
 - `third-party-app`: CodeRabbit/Qodo/etc. installed on the repository.
 
 ## Do Not Hardcode A Bot
@@ -48,3 +49,13 @@ changes are involved, review automation must require:
 - desktop viewport;
 - design-language notes;
 - "what did not change" notes.
+
+## Redline Guard Adapter
+
+`level-up` can call sibling `redline-guard` as an optional adapter:
+
+- Standalone: `level-up redline --run <run-root> --url <pr-or-mr-url>`.
+- Report bridge: `level-up report --run <run-root> --link <pr-or-mr-url> --redline`.
+- Output: `<run-root>/redline/manifest.json`, `audit-result.json`, and `audit-result.md`.
+
+The adapter is optional by design. Missing `redline-guard` records `skipped`; it does not block the local experiment loop.

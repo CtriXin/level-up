@@ -46,6 +46,7 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `runner`: current session now; future opencode/MMS/external model process adapters.
 - `apply`: structured worktree mutation via command, patch, or file-write manifests.
 - `notify`: Feishu/GitHub/GitLab notification adapters after PR or MR creation.
+- `redline`: optional PR/MR merge-readiness audit through sibling `redline-guard`.
 
 ## Quick Start
 
@@ -112,6 +113,24 @@ npm run level-up -- runner-pack --run /path/to/project/.level-up/runs/<run-id> \
 The current recommended mode is hybrid: the Codex/MMS session acts as the model runner, while `level-up` records runtime state, validation, self-review, ledger, and PR evidence. Future `opencode-profile` and `mms-runner` adapters should consume the same packet.
 
 Notify Feishu after a PR or MR is created:
+
+Run the optional `redline-guard` audit after a PR/MR exists:
+
+```bash
+npm run level-up -- redline --run /path/to/project/.level-up/runs/<run-id> \
+  --url "https://github.com/org/repo/pull/123" \
+  --validate --notify
+```
+
+You can also attach it while refreshing the Chinese report:
+
+```bash
+npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id> \
+  --link "https://github.com/org/repo/pull/123" \
+  --redline
+```
+
+`redline` is an optional adapter. It first looks for a configured `--redline-bin` or `LEVEL_UP_REDLINE_BIN`, then a sibling `../redline-guard/src/cli.mjs`, then `redline-guard` on PATH. If none exists, the run records `skipped` instead of failing the L3 loop.
 
 ```bash
 npm run level-up -- notify \

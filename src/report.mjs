@@ -46,6 +46,7 @@ function loadArtifacts(runRoot) {
     runner: readOptionalJson(join(runRoot, "runner", "manifest.json")),
     autopilotSummary: readOptionalJson(join(runRoot, "autopilot-summary.json")),
     prPack: readOptionalJson(join(runRoot, "pr", "manifest.json")),
+    redline: readOptionalJson(join(runRoot, "redline", "manifest.json")),
     devLoops: ["baseline", "experiment", "final"]
       .map((phase) => readOptionalJson(join(runRoot, `dev-loop-${phase}.json`)))
       .filter(Boolean),
@@ -82,7 +83,7 @@ function normalizeLinks(options) {
   };
 }
 
-function renderZhReport({ runRoot, goal, state, scan, ideas, workPack, runner, autopilotSummary, prPack, devLoops, ledger, manifest }) {
+function renderZhReport({ runRoot, goal, state, scan, ideas, workPack, runner, autopilotSummary, prPack, redline, devLoops, ledger, manifest }) {
   const kept = ledger.filter((entry) => entry.status === "keep");
   const discarded = ledger.filter((entry) => entry.status === "discard");
   const crashed = ledger.filter((entry) => entry.status === "crash");
@@ -129,13 +130,17 @@ ${renderValidation(devLoops, scan)}
 
 ${renderLinks(manifest.links, prPack)}
 
+## Redline Guard 预审
+
+${renderRedline(redline)}
+
 ## Feishu 通知
 
 ${manifest.notifyStatus}
 
 ## 关键产物
 
-${renderArtifacts({ runRoot, workPack, runner, prPack })}
+${renderArtifacts({ runRoot, workPack, runner, prPack, redline })}
 
 ## 下一步
 
@@ -225,7 +230,27 @@ function renderLinks(links, prPack) {
   return lines.length ? lines.join("\n") : "- 暂无 PR/MR 链接。";
 }
 
-function renderArtifacts({ runRoot, workPack, runner, prPack }) {
+function renderRedline(redline) {
+  if (!redline) {
+    return "- 未运行 redline-guard；可在生成 PR/MR 后执行 `level-up redline` 或 `level-up report --redline`。";
+  }
+  const lines = [
+    `- status: \`${redline.status}\``,
+    `- url: ${redline.url || "未记录"}`
+  ];
+  if (redline.decision) {
+    lines.push(`- decision: \`${redline.decision}\``);
+  }
+  if (redline.reason) {
+    lines.push(`- reason: \`${redline.reason}\``);
+  }
+  if (redline.files?.resultMarkdown) {
+    lines.push(`- report: \`${redline.files.resultMarkdown}\``);
+  }
+  return lines.join("\n");
+}
+
+function renderArtifacts({ runRoot, workPack, runner, prPack, redline }) {
   const lines = [`- run root: \`${runRoot}\``];
   if (workPack?.files?.spec) {
     lines.push(`- spec: \`${workPack.files.spec}\``);
@@ -238,6 +263,9 @@ function renderArtifacts({ runRoot, workPack, runner, prPack }) {
   }
   if (prPack?.files?.visualEvidence) {
     lines.push(`- visual evidence: \`${prPack.files.visualEvidence}\``);
+  }
+  if (redline?.files?.manifest) {
+    lines.push(`- redline manifest: \`${redline.files.manifest}\``);
   }
   return lines.join("\n");
 }
