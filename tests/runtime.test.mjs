@@ -380,6 +380,64 @@ test("runAutopilot adapts after a no-change discard with concrete apply", () => 
   assert.ok(existsSync(second.evaluation.files.manifest));
 });
 
+test("runAutopilot executes a validation repair apply after validation failure", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Repair after a validation failure",
+    metric: "Increase validation repair confidence"
+  });
+  const summary = runAutopilot(result.runRoot, {
+    rounds: 2,
+    execute: true,
+    runner: "current-session",
+    runnerProfile: "codex-session",
+    applyCommand: "node -e \"require('fs').appendFileSync('package.json', '\\n  \\n')\""
+  });
+  const [first, second] = summary.rounds;
+
+  assert.equal(first.decision, "discard");
+  assert.equal(first.evaluation.checks.validationPassed, false);
+  assert.equal(second.candidateId, "adaptive-validation-repair");
+  assert.equal(second.strategy.syntheticCandidate, true);
+  assert.equal(second.strategy.adaptation.trigger, "validation-failed");
+  assert.equal(second.strategy.adaptation.apply.mode, "write-file");
+  assert.equal(second.apply.mode, "write-file");
+  assert.equal(second.apply.status, "pass");
+  assert.equal(second.apply.targetFile, "proof/repair-002-adaptive-validation-repair.md");
+  assert.match(readFileSync(second.apply.targetPath, "utf8"), /Trigger: validation-failed/);
+});
+
+test("runAutopilot executes a review blocker repair apply after self-review blocks", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Repair after a self-review blocker",
+    metric: "Increase review repair confidence"
+  });
+  const fakeReviewToken = `ghp_${"12345678901234567890"}`;
+  const summary = runAutopilot(result.runRoot, {
+    rounds: 2,
+    execute: true,
+    runner: "current-session",
+    runnerProfile: "codex-session",
+    applyCommand: `node -e "const fs=require('fs'); const path='package.json'; const p=JSON.parse(fs.readFileSync(path, 'utf8')); p.token='${fakeReviewToken}'; fs.writeFileSync(path, JSON.stringify(p, null, 2) + '\\n')"`
+  });
+  const [first, second] = summary.rounds;
+
+  assert.equal(first.decision, "discard");
+  assert.equal(first.evaluation.checks.validationPassed, true);
+  assert.equal(first.evaluation.checks.reviewPassed, false);
+  assert.equal(second.candidateId, "adaptive-review-blocker-repair");
+  assert.equal(second.strategy.syntheticCandidate, true);
+  assert.equal(second.strategy.adaptation.trigger, "review-blocked");
+  assert.equal(second.strategy.adaptation.apply.mode, "write-file");
+  assert.equal(second.apply.mode, "write-file");
+  assert.equal(second.apply.status, "pass");
+  assert.equal(second.apply.targetFile, "proof/repair-002-adaptive-review-blocker-repair.md");
+  assert.match(readFileSync(second.apply.targetPath, "utf8"), /Trigger: review-blocked/);
+});
+
 test("selectNextCandidate generates a validation repair candidate after validation failure", () => {
   const repo = fixtureRepo();
   const result = createRun({
@@ -415,6 +473,8 @@ test("selectNextCandidate generates a validation repair candidate after validati
   assert.equal(strategy.manifest.syntheticCandidate, true);
   assert.equal(strategy.manifest.adaptation.trigger, "validation-failed");
   assert.equal(strategy.manifest.adaptation.action, "generate-validation-repair-candidate");
+  assert.equal(strategy.manifest.adaptation.apply.mode, "write-file");
+  assert.equal(strategy.manifest.adaptation.apply.targetFile, "proof/repair-{roundPadded}-{candidateId}.md");
   assert.ok(existsSync(strategy.manifest.files.manifest));
 });
 
@@ -453,6 +513,8 @@ test("selectNextCandidate generates a review blocker repair candidate after revi
   assert.equal(strategy.manifest.syntheticCandidate, true);
   assert.equal(strategy.manifest.adaptation.trigger, "review-blocked");
   assert.equal(strategy.manifest.adaptation.action, "generate-review-blocker-repair-candidate");
+  assert.equal(strategy.manifest.adaptation.apply.mode, "write-file");
+  assert.equal(strategy.manifest.adaptation.apply.targetFile, "proof/repair-{roundPadded}-{candidateId}.md");
   assert.ok(existsSync(strategy.manifest.files.manifest));
 });
 
