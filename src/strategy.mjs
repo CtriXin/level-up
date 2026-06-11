@@ -16,7 +16,7 @@ export function selectNextCandidate(runRootInput, options = {}) {
   const requestedId = options.requestedId || null;
   const selected = requestedId
     ? requireCandidate(candidates, requestedId)
-    : pickUntriedCandidate(candidates, tried);
+    : adaptation?.candidate ?? pickUntriedCandidate(candidates, tried);
   const reason = selectionReason({ requestedId, selected, tried, adaptation });
 
   const experimentDir = join(runRoot, "experiments", `round-${String(round).padStart(3, "0")}`);
@@ -25,6 +25,7 @@ export function selectNextCandidate(runRootInput, options = {}) {
     version: VERSION,
     round,
     selectedCandidateId: selected.id,
+    syntheticCandidate: Boolean(adaptation?.candidate && selected.id === adaptation.candidate.id),
     reason,
     priorCandidateIds: [...tried],
     lastResult: summarizeLastResult(lastResult),
@@ -65,21 +66,51 @@ function buildAdaptation(lastResult) {
   if (checks.validationPassed === false) {
     return {
       trigger: "validation-failed",
-      action: "prefer-validation-fix",
-      reason: "previous validation failed; next candidate should reduce validation risk"
+      action: "generate-validation-repair-candidate",
+      reason: "previous validation failed; next candidate should repair the validation path before broader mutation",
+      candidate: repairCandidate({
+        id: "adaptive-validation-repair",
+        title: "Repair validation failure before continuing",
+        hypothesis: "A focused validation repair candidate can restore the local gate before level-up attempts broader experiments.",
+        expectedImpact: "Increases confidence that future keep decisions are based on passing validation rather than ignored failures.",
+        risk: "Low to medium; validation repair can mask a real product bug if it only weakens the gate.",
+        rollback: "Discard the experiment worktree or revert the validation repair commit.",
+        validation: lastResult.validation
+      })
     };
   }
   if (checks.reviewPassed === false) {
     return {
       trigger: "review-blocked",
-      action: "address-review-blocker",
-      reason: "self-review blocked the previous experiment"
+      action: "generate-review-blocker-repair-candidate",
+      reason: "self-review blocked the previous experiment; next candidate should address the blocker directly",
+      candidate: repairCandidate({
+        id: "adaptive-review-blocker-repair",
+        title: "Address self-review blocker",
+        hypothesis: "A focused repair candidate can remove the blocker that made the previous experiment unsafe to keep.",
+        expectedImpact: "Allows the loop to continue only after the specific review risk is reduced.",
+        risk: "Medium; blocker repair may require human review if the issue touches safety boundaries.",
+        rollback: "Discard the experiment worktree or revert the blocker repair commit.",
+        validation: lastResult.validation
+      })
     };
   }
   return {
     trigger: "discarded",
     action: "switch-candidate",
     reason: "previous round was discarded; try another candidate"
+  };
+}
+
+function repairCandidate(fields) {
+  return {
+    id: fields.id,
+    title: fields.title,
+    hypothesis: fields.hypothesis,
+    expectedImpact: fields.expectedImpact,
+    risk: fields.risk,
+    rollback: fields.rollback,
+    validation: fields.validation ?? []
   };
 }
 
@@ -100,6 +131,9 @@ function summarizeLastResult(result) {
 function selectionReason({ requestedId, selected, tried, adaptation }) {
   if (requestedId) {
     return "user requested this candidate";
+  }
+  if (adaptation?.candidate) {
+    return `${adaptation.trigger} triggered synthetic repair candidate ${selected.id}`;
   }
   if (adaptation?.trigger === "no-change") {
     return "previous round made no change; switching candidate and using a concrete adaptive apply";

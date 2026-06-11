@@ -60,7 +60,7 @@ slot skipped: <name> reason: <why safe> assumption: <what> risk_if_wrong: <impac
 - Create PR/MR and Feishu notification when the repo/provider is available and the run produced useful changes.
 - Always leave a Chinese report at `REPORT.zh.md` under the run root.
 - Prefer structured apply inputs over ad hoc worktree mutation: `--apply-patch`, `--apply-write-file`, or a narrow `--apply-command`.
-- After a discard, let strategy inspect evaluation before the next round; no-change should become a more concrete safe apply, validation failure should reduce validation risk, and blocked apply should stop or require safer input.
+- After a discard, let strategy inspect evaluation before the next round; no-change should become a more concrete safe apply, validation failure should generate a validation repair candidate, review-blocked should generate a blocker repair candidate, and blocked apply should stop or require safer input.
 
 ## Fallback CLI
 
