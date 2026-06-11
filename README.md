@@ -44,6 +44,7 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `recovery`: nsr-lite milestones, next action, and resume state.
 - `policy`: hard gates, forbidden actions, and human approval boundaries.
 - `runner`: current session now; future opencode/MMS/external model process adapters.
+- `apply`: structured worktree mutation via command, patch, or file-write manifests.
 - `notify`: Feishu/GitHub/GitLab notification adapters after PR or MR creation.
 
 ## Quick Start
@@ -77,6 +78,16 @@ Generate the same loop with a user-readable Chinese report:
 ```bash
 npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> --execute --pr-pack --report
 ```
+
+Run a round with a structured apply adapter:
+
+```bash
+npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> \
+  --apply-patch /tmp/experiment.patch \
+  --execute --pr-pack --report
+```
+
+`level-up` also supports `--apply-write-file <path> --apply-content <text>` for small generated files and keeps `--apply-command <cmd>` for narrow local commands. Unsafe command patterns are blocked before validation.
 
 Generate or refresh a report for an existing run:
 

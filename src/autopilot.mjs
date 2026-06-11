@@ -1,6 +1,5 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import { generateIdeas } from "./ideation.mjs";
 import { generatePrPack } from "./pr-pack.mjs";
 import {
@@ -17,6 +16,7 @@ import { runDevLoop } from "./dev-loop.mjs";
 import { generateWorkPack } from "./work-pack.mjs";
 import { reviewExperiment } from "./self-review.mjs";
 import { generateRunnerPacket } from "./runner.mjs";
+import { runApplyStep } from "./apply.mjs";
 
 export function runAutopilot(runRootInput, options = {}) {
   const runRoot = resolve(runRootInput);
@@ -37,6 +37,10 @@ export function runAutopilot(runRootInput, options = {}) {
       candidate,
       worktreePath: worktree.worktreePath,
       applyCommand: options.applyCommand,
+      applyPatch: options.applyPatch,
+      applyWriteFile: options.applyWriteFile,
+      applyContent: options.applyContent,
+      applyContentFile: options.applyContentFile,
       runner: options.runner,
       runnerProfile: options.runnerProfile,
       skills: options.skills,
@@ -96,10 +100,34 @@ function selectCandidate(candidates, requestedId) {
   );
 }
 
-function runRound({ runRoot, round, candidate, worktreePath, applyCommand, runner, runnerProfile, skills, mcp, tools, execute, commitKept }) {
+function runRound({
+  runRoot,
+  round,
+  candidate,
+  worktreePath,
+  applyCommand,
+  applyPatch,
+  applyWriteFile,
+  applyContent,
+  applyContentFile,
+  runner,
+  runnerProfile,
+  skills,
+  mcp,
+  tools,
+  execute,
+  commitKept
+}) {
   const experimentDir = join(runRoot, "experiments", `round-${String(round).padStart(3, "0")}`);
   ensureDir(experimentDir);
-  writeExperimentMarkdown(join(experimentDir, "EXPERIMENT.md"), { round, candidate, applyCommand, execute });
+  writeExperimentMarkdown(join(experimentDir, "EXPERIMENT.md"), {
+    round,
+    candidate,
+    applyCommand,
+    applyPatch,
+    applyWriteFile,
+    execute
+  });
 
   const runnerPacket = generateRunnerPacket(runRoot, {
     runner,
@@ -111,7 +139,17 @@ function runRound({ runRoot, round, candidate, worktreePath, applyCommand, runne
     tools
   });
   const before = getWorktreeStatus(worktreePath);
-  const apply = applyCommand ? runShell(worktreePath, applyCommand) : null;
+  const apply = runApplyStep({
+    runRoot,
+    round,
+    candidate,
+    worktreePath,
+    applyCommand,
+    applyPatch,
+    applyWriteFile,
+    applyContent,
+    applyContentFile
+  });
   const experimentPhase = runDevLoop(runRoot, { phase: "experiment", execute });
   const finalPhase = runDevLoop(runRoot, { phase: "final", execute });
   const after = getWorktreeStatus(worktreePath);
@@ -123,7 +161,7 @@ function runRound({ runRoot, round, candidate, worktreePath, applyCommand, runne
   });
   const changed = after.length > 0 || before !== after;
   const validationPassed = [experimentPhase, finalPhase].every((phase) => phase.status === "pass" || (!execute && phase.status === "planned"));
-  const applyPassed = !apply || apply.status === "pass";
+  const applyPassed = apply.status === "pass" || apply.status === "skipped";
   const decision = changed && validationPassed && applyPassed && review.status !== "blocked" ? "keep" : "discard";
   const commit = decision === "keep" && commitKept ? commitExperiment(worktreePath, candidate) : "0000000";
   const score = decision === "keep" ? 1 : 0;
@@ -152,7 +190,7 @@ function runRound({ runRoot, round, candidate, worktreePath, applyCommand, runne
   return result;
 }
 
-function writeExperimentMarkdown(path, { round, candidate, applyCommand, execute }) {
+function writeExperimentMarkdown(path, { round, candidate, applyCommand, applyPatch, applyWriteFile, execute }) {
   writeFileSync(
     path,
     `# Experiment round ${round}
@@ -180,7 +218,7 @@ ${candidate.rollback}
 
 ## Apply
 
-${applyCommand ? `\`${applyCommand}\`` : "_No apply command supplied. The agent or adapter must modify the worktree before this can keep._"}
+${renderApplyIntent({ applyCommand, applyPatch, applyWriteFile })}
 
 ## Validation Mode
 
@@ -189,20 +227,17 @@ ${execute ? "execute" : "planned"}
   );
 }
 
-function runShell(cwd, command) {
-  const result = spawnSync(command, {
-    cwd,
-    shell: true,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-  return {
-    command,
-    status: result.status === 0 ? "pass" : "fail",
-    exitCode: result.status ?? 1,
-    stdout: result.stdout.trim(),
-    stderr: result.stderr.trim()
-  };
+function renderApplyIntent({ applyCommand, applyPatch, applyWriteFile }) {
+  if (applyCommand) {
+    return `mode: command\n\n\`${applyCommand}\``;
+  }
+  if (applyPatch) {
+    return `mode: patch\n\n\`${applyPatch}\``;
+  }
+  if (applyWriteFile) {
+    return `mode: write-file\n\n\`${applyWriteFile}\``;
+  }
+  return "_No apply input supplied. The agent or adapter must modify the worktree before this can keep._";
 }
 
 function getWorktreeStatus(worktreePath) {

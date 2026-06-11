@@ -55,7 +55,7 @@ Usage:
   level-up work-pack --run <run-root>
   level-up runner-pack --run <run-root> [--runner current-session|opencode-profile|mms-runner|external-command] [--runner-profile <name>]
   level-up dev-loop --run <run-root> --phase baseline|experiment|final [--execute]
-  level-up run --run <run-root> [--execute] [--pr-pack] [--runner <type>] [--runner-profile <name>] [--candidate <id>] [--apply-command <cmd>] [--commit-kept] [--rounds <n>]
+  level-up run --run <run-root> [--execute] [--pr-pack] [--runner <type>] [--runner-profile <name>] [--candidate <id>] [--apply-command <cmd>|--apply-patch <file>|--apply-write-file <path> --apply-content <text>] [--commit-kept] [--rounds <n>]
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
@@ -153,6 +153,10 @@ async function main() {
         force: Boolean(args.force),
         candidate: args.candidate === true ? null : args.candidate,
         applyCommand: args["apply-command"] === true ? null : args["apply-command"],
+        applyPatch: args["apply-patch"] === true ? null : args["apply-patch"],
+        applyWriteFile: args["apply-write-file"] === true ? null : args["apply-write-file"],
+        applyContent: args["apply-content"] === true ? "" : args["apply-content"],
+        applyContentFile: args["apply-content-file"] === true ? null : args["apply-content-file"],
         runner: args.runner === true ? null : args.runner,
         runnerProfile: args["runner-profile"] === true ? null : args["runner-profile"],
         skills: args.skills,

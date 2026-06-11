@@ -28,7 +28,7 @@ When triggered this way, the agent owns init, scan, interview when needed, runne
 5. Generate a work pack with SPEC and TODO artifacts.
 6. Create an isolated experiment worktree.
 7. Generate a runner packet. Default runner is the current agent session; future runners may be `opencode-profile`, `mms-runner`, or `external-command`.
-8. Run one experiment per round.
+8. Run one experiment per round through the apply adapter when possible: command, patch, or file-write.
 9. Validate through dev-loop phases, evaluate, review, then keep/discard/crash.
 10. Record every result in the ledger.
 11. Generate a PR/MR packet with PR body, bug-review request, and visual evidence checklist.
@@ -58,6 +58,7 @@ slot skipped: <name> reason: <why safe> assumption: <what> risk_if_wrong: <impac
 - If the user says `你定`, `先做`, `defaults`, or gives a narrow target, proceed with conservative defaults.
 - Create PR/MR and Feishu notification when the repo/provider is available and the run produced useful changes.
 - Always leave a Chinese report at `REPORT.zh.md` under the run root.
+- Prefer structured apply inputs over ad hoc worktree mutation: `--apply-patch`, `--apply-write-file`, or a narrow `--apply-command`.
 
 ## Fallback CLI
 
