@@ -55,6 +55,7 @@ The repository includes a dependency-free local runner:
 ```bash
 npm run level-up -- init --target /path/to/repo --goal "..." --metric "..."
 npm run level-up -- scan --run /path/to/repo/.level-up/runs/<run-id>
+npm run level-up -- ideas --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- worktree --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- record --run /path/to/repo/.level-up/runs/<run-id> --status keep --score 1 --description "..."
 ```

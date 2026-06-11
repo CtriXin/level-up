@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/idea.schema.json",
+  "title": "LevelUpIdeaCandidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "hypothesis",
+    "expectedImpact",
+    "risk",
+    "validation",
+    "rollback",
+    "scoreHint"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "hypothesis": { "type": "string", "minLength": 1 },
+    "expectedImpact": { "type": "string", "minLength": 1 },
+    "risk": { "type": "string", "minLength": 1 },
+    "validation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "status"],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "pass", "fail", "skipped"]
+          },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "rollback": { "type": "string", "minLength": 1 },
+    "scoreHint": { "type": "string", "minLength": 1 }
+  }
+}

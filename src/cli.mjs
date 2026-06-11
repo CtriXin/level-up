@@ -8,6 +8,7 @@ import {
   readJson,
   scanTarget
 } from "./runtime.mjs";
+import { generateIdeas } from "./ideation.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -43,6 +44,7 @@ function help() {
 Usage:
   level-up init --target <repo> --goal <goal> [--metric <metric>]
   level-up scan --run <run-root>
+  level-up ideas --run <run-root>
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up status --run <run-root>
@@ -90,6 +92,11 @@ async function main() {
     const runRoot = resolve(requireValue(args, "run"));
     const goal = readJson(resolve(runRoot, "goal.json"));
     print(scanTarget(goal.target.path, runRoot));
+    return;
+  }
+
+  if (command === "ideas") {
+    print(generateIdeas(requireValue(args, "run"), { limit: args.limit }));
     return;
   }
 

@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { generateIdeas } from "../src/ideation.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
 
 function sh(cwd, command, args) {
@@ -85,4 +86,19 @@ test("appendLedger records rounds and stops at max rounds", () => {
   });
   assert.equal(recorded.round, 1);
   assert.equal(recorded.state.status, "stopped");
+});
+
+test("generateIdeas writes structured experiment candidates", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Improve runtime usefulness",
+    metric: "Increase confidence"
+  });
+  scanTarget(repo, result.runRoot);
+  const ideas = generateIdeas(result.runRoot);
+  assert.equal(ideas.slot, "ideation");
+  assert.ok(ideas.candidates.length >= 3);
+  assert.equal(ideas.candidates[0].id, "baseline-validation");
+  assert.equal(ideas.candidates[0].validation[0].command, "npm run check");
 });

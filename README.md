@@ -63,6 +63,12 @@ Scan the target:
 npm run level-up -- scan --run /path/to/project/.level-up/runs/<run-id>
 ```
 
+Generate structured experiment candidates:
+
+```bash
+npm run level-up -- ideas --run /path/to/project/.level-up/runs/<run-id>
+```
+
 Create an isolated experiment worktree:
 
 ```bash

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "level-up": "node src/cli.mjs",
-    "check": "node --check src/cli.mjs && node --check src/runtime.mjs",
+    "check": "node --check src/cli.mjs && node --check src/runtime.mjs && node --check src/ideation.mjs",
     "test": "node --test"
   },
   "engines": {
