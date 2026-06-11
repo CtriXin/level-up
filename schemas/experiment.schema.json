@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/experiment.schema.json",
+  "title": "LevelUpExperiment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "round",
+    "hypothesis",
+    "expectedImpact",
+    "risk",
+    "validation",
+    "status"
+  ],
+  "properties": {
+    "round": { "type": "integer", "minimum": 1 },
+    "hypothesis": { "type": "string", "minLength": 1 },
+    "expectedImpact": { "type": "string", "minLength": 1 },
+    "risk": { "type": "string" },
+    "changedFiles": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "validation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "status"],
+        "properties": {
+          "command": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "pass", "fail", "skipped"] },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "score": { "type": "number" },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["pending", "pass", "blocked", "residual-risk"] },
+        "summary": { "type": "string" }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planned", "keep", "discard", "crash"]
+    }
+  }
+}
