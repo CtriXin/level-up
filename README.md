@@ -42,6 +42,7 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `strategy`: choose the next untried candidate, adapt after failed rounds, generate repair candidates with safe apply plans, and record why.
 - `metric`: scoring for performance, UI, tests, code health, or custom goals.
 - `evaluator`: turn apply, validation, review, and worktree delta into keep/discard evidence for the next strategy step.
+- `repair-adapter`: turn validation/review failure evidence into bounded safe repair apply plans.
 - `review`: self-review or review-hub style independent review.
 - `recovery`: nsr-lite milestones, next action, and resume state.
 - `policy`: hard gates, forbidden actions, and human approval boundaries.

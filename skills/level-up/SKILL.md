@@ -61,6 +61,7 @@ slot skipped: <name> reason: <why safe> assumption: <what> risk_if_wrong: <impac
 - Always leave a Chinese report at `REPORT.zh.md` under the run root.
 - Prefer structured apply inputs over ad hoc worktree mutation: `--apply-patch`, `--apply-write-file`, or a narrow `--apply-command`.
 - After a discard, let strategy inspect evaluation before the next round; no-change should become a more concrete safe apply, validation failure should generate a validation repair candidate with its own safe apply, review-blocked should generate a blocker repair candidate with its own safe apply, and blocked apply should stop or require safer input.
+- Treat repair adapters as optional capability blocks: they may summarize validation/review evidence into bounded repair apply plans, but they should not repeat a failed explicit apply or copy raw secrets/stdout into artifacts.
 
 ## Fallback CLI
 
