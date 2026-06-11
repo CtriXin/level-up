@@ -9,6 +9,7 @@ export function generatePrPack(runRootInput, options = {}) {
   const scan = readOptionalJson(join(runRoot, "scan.json"));
   const ideas = readOptionalJson(join(runRoot, "ideas.json"));
   const workPack = readOptionalJson(join(runRoot, "work-pack", "manifest.json"));
+  const runner = readOptionalJson(join(runRoot, "runner", "manifest.json"));
   const devLoops = ["baseline", "experiment", "final"]
     .map((phase) => readOptionalJson(join(runRoot, `dev-loop-${phase}.json`)))
     .filter(Boolean);
@@ -34,7 +35,7 @@ export function generatePrPack(runRootInput, options = {}) {
     }
   };
 
-  writeFileSync(manifest.files.prBody, renderPrBody({ goal, state, scan, ideas, workPack, devLoops, ledger, visualMode }));
+  writeFileSync(manifest.files.prBody, renderPrBody({ goal, state, scan, ideas, workPack, runner, devLoops, ledger, visualMode }));
   writeFileSync(manifest.files.bugReview, renderBugReview({ goal, state, ledger, reviewerBot }));
   writeFileSync(manifest.files.visualEvidence, renderVisualEvidence({ goal, visualMode }));
   writeJson(manifest.files.manifest, manifest);
@@ -73,7 +74,7 @@ function inferVisualMode(goal, ideas) {
   return /\b(ui|visual|design|screenshot|responsive|layout|css|homepage|page)\b/.test(text);
 }
 
-function renderPrBody({ goal, state, scan, ideas, workPack, devLoops, ledger, visualMode }) {
+function renderPrBody({ goal, state, scan, ideas, workPack, runner, devLoops, ledger, visualMode }) {
   const kept = ledger.filter((entry) => entry.status === "keep");
   const discarded = ledger.filter((entry) => entry.status === "discard");
   const crashed = ledger.filter((entry) => entry.status === "crash");
@@ -114,6 +115,10 @@ ${renderValidation(scan)}
 
 ${renderWorkPack(workPack)}
 
+## Runner
+
+${renderRunner(runner)}
+
 ## Dev Loop
 
 ${renderDevLoops(devLoops)}
@@ -135,6 +140,18 @@ ${visualMode
 
 ${renderIdeas(ideas)}
 `;
+}
+
+function renderRunner(runner) {
+  if (!runner) {
+    return "_No runner packet generated yet._";
+  }
+  return [
+    `- type: \`${runner.runner.type}\``,
+    `- profile: \`${runner.runner.profile}\``,
+    `- mode: \`${runner.runner.mode}\``,
+    `- packet: \`${runner.files.packet}\``
+  ].join("\n");
 }
 
 function renderWorkPack(workPack) {

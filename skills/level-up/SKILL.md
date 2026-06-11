@@ -19,11 +19,12 @@ Use this skill to `level-up` a project, run `autoresearch-lite`, or let an agent
 4. Generate experiment candidates with hypothesis, expected impact, risk, validation, and rollback plan.
 5. Generate a work pack with SPEC and TODO artifacts.
 6. Create an isolated experiment worktree.
-7. Run one experiment per round.
-8. Validate through dev-loop phases, evaluate, review, then keep/discard/crash.
-9. Record every result in the ledger.
-10. Generate a PR packet with PR body, bug-review request, and visual evidence checklist.
-11. Stop before merge, deploy, or irreversible actions.
+7. Generate a runner packet. Default runner is the current agent session; future runners may be `opencode-profile`, `mms-runner`, or `external-command`.
+8. Run one experiment per round.
+9. Validate through dev-loop phases, evaluate, review, then keep/discard/crash.
+10. Record every result in the ledger.
+11. Generate a PR packet with PR body, bug-review request, and visual evidence checklist.
+12. Stop before merge, deploy, or irreversible actions.
 
 ## Hard Gates
 
@@ -51,6 +52,7 @@ The repository includes a dependency-free local runner:
 
 ```bash
 npm run level-up -- init --target /path/to/repo --goal "..." --metric "..."
+npm run level-up -- runner-pack --run /path/to/repo/.level-up/runs/<run-id> --runner current-session
 npm run level-up -- run --run /path/to/repo/.level-up/runs/<run-id> --execute --pr-pack
 npm run level-up -- scan --run /path/to/repo/.level-up/runs/<run-id>
 npm run level-up -- ideas --run /path/to/repo/.level-up/runs/<run-id>

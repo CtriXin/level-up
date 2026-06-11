@@ -9,6 +9,7 @@ import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
+import { generateRunnerPacket } from "../src/runner.mjs";
 import { reviewExperiment } from "../src/self-review.mjs";
 import { generateWorkPack } from "../src/work-pack.mjs";
 
@@ -131,6 +132,31 @@ test("generateWorkPack writes SPEC and TODO artifacts", () => {
   assert.match(readFileSync(pack.files.spec, "utf8"), /Make work reviewable/);
 });
 
+test("generateRunnerPacket writes current-session runner artifacts", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Let the current session act as the runner",
+    metric: "Increase traceability"
+  });
+  scanTarget(repo, result.runRoot);
+  generateIdeas(result.runRoot);
+  generateWorkPack(result.runRoot);
+  const worktree = createWorktree(result.runRoot);
+  const packet = generateRunnerPacket(result.runRoot, {
+    runner: "current-session",
+    profile: "codex-session",
+    worktreePath: worktree.worktreePath,
+    skills: "level-up,interview",
+    mcp: "github,browser"
+  });
+  assert.equal(packet.runner.type, "current-session");
+  assert.equal(packet.runner.profile, "codex-session");
+  assert.deepEqual(packet.skills, ["level-up", "interview"]);
+  assert.ok(existsSync(packet.files.packet));
+  assert.match(readFileSync(packet.files.packet, "utf8"), /Let the current session act as the runner/);
+});
+
 test("runDevLoop writes a dry-run phase plan", () => {
   const repo = fixtureRepo();
   const result = createRun({
@@ -181,11 +207,18 @@ test("runAutopilot discards a no-op experiment and still writes PR evidence", ()
     goal: "Reach practical L3 by trying a local no-op safely",
     metric: "Increase autopilot safety confidence"
   });
-  const summary = runAutopilot(result.runRoot, { prPack: true });
+  const summary = runAutopilot(result.runRoot, {
+    prPack: true,
+    runner: "current-session",
+    runnerProfile: "codex-session",
+    skills: "level-up,interview"
+  });
   assert.equal(summary.status, "stopped");
   assert.equal(summary.rounds.length, 1);
   assert.equal(summary.rounds[0].decision, "discard");
   assert.equal(summary.rounds[0].changed, false);
+  assert.equal(summary.rounds[0].runner.runner.type, "current-session");
+  assert.match(readFileSync(summary.prPack.files.prBody, "utf8"), /## Runner/);
   assert.ok(summary.prPack.files.prBody.endsWith("PR_BODY.md"));
 });
 

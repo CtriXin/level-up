@@ -14,7 +14,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["round", "candidateId", "decision", "score", "commit", "changed", "apply", "validation", "review"],
+        "required": ["round", "candidateId", "decision", "score", "commit", "changed", "runner", "apply", "validation", "review"],
         "properties": {
           "round": { "type": "integer" },
           "candidateId": { "type": "string" },
@@ -22,6 +22,9 @@
           "score": { "type": "number" },
           "commit": { "type": "string" },
           "changed": { "type": "boolean" },
+          "runner": {
+            "type": "object"
+          },
           "apply": {
             "type": ["object", "null"]
           },

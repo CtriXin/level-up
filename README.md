@@ -43,6 +43,7 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `review`: self-review or review-hub style independent review.
 - `recovery`: nsr-lite milestones, next action, and resume state.
 - `policy`: hard gates, forbidden actions, and human approval boundaries.
+- `runner`: current session now; future opencode/MMS/external model process adapters.
 
 ## Quick Start
 
@@ -62,12 +63,25 @@ npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> --execute
 
 `level-up run` ensures scan, ideas, work-pack, baseline validation, an isolated worktree, experiment/final validation, deterministic self-review, ledger recording, and optional PR evidence. If the round makes no change or fails validation/review, it records `discard` instead of pretending the attempt worked.
 
+Generate a runner packet for the current session or a future model process:
+
+```bash
+npm run level-up -- runner-pack --run /path/to/project/.level-up/runs/<run-id> \
+  --runner current-session \
+  --runner-profile codex-session \
+  --skills level-up,interview \
+  --mcp github,browser
+```
+
+The current recommended mode is hybrid: the Codex/MMS session acts as the model runner, while `level-up` records runtime state, validation, self-review, ledger, and PR evidence. Future `opencode-profile` and `mms-runner` adapters should consume the same packet.
+
 Step-by-step commands remain available for debugging or manual control:
 
 ```bash
 npm run level-up -- scan --run /path/to/project/.level-up/runs/<run-id>
 npm run level-up -- ideas --run /path/to/project/.level-up/runs/<run-id>
 npm run level-up -- work-pack --run /path/to/project/.level-up/runs/<run-id>
+npm run level-up -- runner-pack --run /path/to/project/.level-up/runs/<run-id> --runner current-session
 npm run level-up -- worktree --run /path/to/project/.level-up/runs/<run-id>
 npm run level-up -- dev-loop --run /path/to/project/.level-up/runs/<run-id> --phase baseline
 npm run level-up -- dev-loop --run /path/to/project/.level-up/runs/<run-id> --phase final --execute

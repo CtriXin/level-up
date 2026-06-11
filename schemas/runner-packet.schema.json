@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/runner-packet.schema.json",
+  "title": "LevelUpRunnerPacket",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "runId", "createdAt", "runner", "target", "objective", "metric", "candidate", "worktreePath", "skills", "mcp", "tools", "files", "references", "safety"],
+  "properties": {
+    "version": { "type": "string" },
+    "runId": { "type": "string" },
+    "createdAt": { "type": "string" },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "profile", "mode", "sessionId"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["current-session", "opencode-profile", "mms-runner", "external-command"]
+        },
+        "profile": { "type": "string" },
+        "mode": { "type": "string" },
+        "sessionId": { "type": ["string", "null"] }
+      }
+    },
+    "target": { "type": "object" },
+    "objective": { "type": "string" },
+    "metric": { "type": "object" },
+    "candidate": { "type": ["object", "null"] },
+    "worktreePath": { "type": ["string", "null"] },
+    "skills": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "mcp": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tools": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packet", "manifest"],
+      "properties": {
+        "packet": { "type": "string" },
+        "manifest": { "type": "string" }
+      }
+    },
+    "references": { "type": "object" },
+    "safety": { "type": "object" }
+  }
+}
