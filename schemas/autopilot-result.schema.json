@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/autopilot-result.schema.json",
+  "title": "LevelUpAutopilotResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "runId", "status", "rounds"],
+  "properties": {
+    "version": { "type": "string" },
+    "runId": { "type": "string" },
+    "status": { "type": "string", "enum": ["pass", "stopped"] },
+    "rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["round", "candidateId", "decision", "score", "commit", "changed", "apply", "validation", "review"],
+        "properties": {
+          "round": { "type": "integer" },
+          "candidateId": { "type": "string" },
+          "decision": { "type": "string", "enum": ["keep", "discard"] },
+          "score": { "type": "number" },
+          "commit": { "type": "string" },
+          "changed": { "type": "boolean" },
+          "apply": {
+            "type": ["object", "null"]
+          },
+          "validation": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "review": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "prPack": {
+      "type": ["object", "null"]
+    }
+  }
+}

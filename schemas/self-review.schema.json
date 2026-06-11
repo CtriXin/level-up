@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrixin.local/level-up/self-review.schema.json",
+  "title": "LevelUpSelfReview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "status", "blockers", "warnings", "branch"],
+  "properties": {
+    "version": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "blocked", "residual-risk"]
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "branch": { "type": "string" }
+  }
+}
