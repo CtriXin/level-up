@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { runAutopilot } from "../src/autopilot.mjs";
 import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
+import { buildFeishuPostPayload, notifyFeishu } from "../src/notify.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
 import { generateRunnerPacket } from "../src/runner.mjs";
@@ -198,6 +199,39 @@ test("generatePrPack writes PR body, bug review, and visual evidence artifacts",
   assert.match(pack.files.visualEvidence, /VISUAL_EVIDENCE\.md$/);
   assert.match(readFileSync(pack.files.prBody, "utf8"), /## Work Pack/);
   assert.match(readFileSync(pack.files.prBody, "utf8"), /## Dev Loop/);
+});
+
+test("buildFeishuPostPayload includes model, repo, and branch for quick triage", () => {
+  const payload = buildFeishuPostPayload({
+    model: "gpt-5",
+    family: "openai",
+    repo: "level-up",
+    branch: "codex/example -> main",
+    title: "perf: 优化首页首屏加载和事件逻辑",
+    link: "https://github.com/CtriXin/level-up/pull/5",
+    status: "check/build 通过",
+    effect: "首页主 JS gzip 下降",
+    nextStep: "请 review diff，确认后 merge。"
+  });
+  const text = JSON.stringify(payload);
+  assert.equal(payload.msg_type, "post");
+  assert.ok(text.includes("Model: gpt-5 / openai"));
+  assert.ok(text.includes("Repo: level-up"));
+  assert.ok(text.includes("Branch: codex/example -> main"));
+  assert.ok(text.includes("请 review diff"));
+});
+
+test("notifyFeishu dry-run returns payload without requiring a webhook", async () => {
+  const result = await notifyFeishu({
+    dryRun: true,
+    repo: "level-up",
+    branch: "codex/example -> main",
+    title: "docs: 测试飞书通知",
+    link: "https://github.com/CtriXin/level-up/pull/5"
+  });
+  assert.equal(result.dryRun, true);
+  assert.equal(result.channel, "feishu");
+  assert.equal(result.payload.content.post.zh_cn.title, "【AI PR】level-up");
 });
 
 test("runAutopilot discards a no-op experiment and still writes PR evidence", () => {

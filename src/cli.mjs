@@ -14,6 +14,7 @@ import { runDevLoop } from "./dev-loop.mjs";
 import { generateWorkPack } from "./work-pack.mjs";
 import { runAutopilot } from "./autopilot.mjs";
 import { generateRunnerPacket } from "./runner.mjs";
+import { notifyFeishu } from "./notify.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -57,6 +58,7 @@ Usage:
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
+  level-up notify --channel feishu --repo <name> --branch <source -> target> --title <title> --link <url> [--dry-run]
   level-up status --run <run-root>
 
 L3 local autopilot stops before merge, deploy, and irreversible actions.`;
@@ -184,6 +186,30 @@ async function main() {
       generatePrPack(requireValue(args, "run"), {
         visual: Boolean(args.visual),
         reviewerBot: args["reviewer-bot"] === true ? null : args["reviewer-bot"]
+      })
+    );
+    return;
+  }
+
+  if (command === "notify") {
+    const channel = args.channel || "feishu";
+    if (channel !== "feishu") {
+      throw new Error(`Unsupported notify channel: ${channel}`);
+    }
+    print(
+      await notifyFeishu({
+        webhookEnv: args["webhook-env"] === true ? null : args["webhook-env"],
+        model: args.model === true ? null : args.model,
+        family: args.family === true ? null : args.family,
+        repo: args.repo,
+        branch: args.branch,
+        title: args.title,
+        link: args.link,
+        status: args.status === true ? null : args.status,
+        effect: args.effect === true ? null : args.effect,
+        nextStep: args["next-step"] === true ? null : args["next-step"],
+        provider: args.provider === true ? null : args.provider,
+        dryRun: Boolean(args["dry-run"])
       })
     );
     return;
