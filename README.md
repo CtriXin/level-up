@@ -123,10 +123,11 @@ Clean up merged worktree folders after a PR or MR is merged:
 ```bash
 npm run level-up -- cleanup-worktrees --repo /path/to/repo --base-ref origin/main --execute
 npm run level-up -- post-merge --repo /path/to/repo --base-ref origin/main \
-  --run /path/to/project/.level-up/runs/<run-id> --execute --delete-branches
+  --run /path/to/project/.level-up/runs/<run-id> --execute --delete-branches \
+  --prune-branches --branch-prefix codex/
 ```
 
-The cleanup command skips the current worktree, protected branches, dirty worktrees, and worktrees whose HEAD is not already merged into the base ref. Without `--execute`, it only reports what would be removed. Add `--delete-branches` only when the local merged branch reference should be removed after the worktree folder is removed. `post-merge` wraps the same safety checks and writes `POST_MERGE_CLEANUP.zh.md` plus `post-merge-cleanup.json` when `--run` or `--output-dir` is provided.
+The cleanup command skips the current worktree, protected branches, dirty worktrees, and worktrees whose HEAD is not already merged into the base ref. Without `--execute`, it only reports what would be removed. Add `--delete-branches` only when the local merged branch reference should be removed after the worktree folder is removed. `post-merge` wraps the same safety checks and writes `POST_MERGE_CLEANUP.zh.md` plus `post-merge-cleanup.json` when `--run` or `--output-dir` is provided. Branch pruning is off by default; use `--prune-branches --branch-prefix codex/` only for merged agent-owned local branches.
 
 Run the optional `redline-guard` audit after a PR/MR exists:
 
