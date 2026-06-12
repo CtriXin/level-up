@@ -58,6 +58,7 @@ slot skipped: <name> reason: <why safe> assumption: <what> risk_if_wrong: <impac
 - Ask 1-3 questions only when the answer changes objective, metric, guardrail, irreversible scope, or human gate.
 - If the user says `你定`, `先做`, `defaults`, or gives a narrow target, proceed with conservative defaults.
 - Create PR/MR and Feishu notification when the repo/provider is available and the run produced useful changes.
+- After PR/MR merge, run merged worktree cleanup for agent-created experiment folders; remove only clean worktrees whose HEAD is already merged into the base ref, and leave dirty/current/protected worktrees alone.
 - Always leave a Chinese report at `REPORT.zh.md` under the run root.
 - Prefer structured apply inputs over ad hoc worktree mutation: `--apply-patch`, `--apply-write-file`, or a narrow `--apply-command`.
 - After a discard, let strategy inspect evaluation before the next round; no-change should become a more concrete safe apply, validation failure should generate a validation repair candidate with its own safe apply, review-blocked should generate a blocker repair candidate with its own safe apply, and blocked apply should stop or require safer input.

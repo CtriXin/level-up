@@ -50,6 +50,7 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `apply`: structured worktree mutation via command, patch, or file-write manifests.
 - `notify`: Feishu/GitHub/GitLab notification adapters after PR or MR creation.
 - `redline`: optional PR/MR merge-readiness audit through sibling `redline-guard`.
+- `cleanup`: remove clean merged experiment worktree folders after PR/MR merge.
 
 ## Quick Start
 
@@ -115,7 +116,15 @@ npm run level-up -- runner-pack --run /path/to/project/.level-up/runs/<run-id> \
 
 The current recommended mode is hybrid: the Codex/MMS session acts as the model runner, while `level-up` records runtime state, validation, self-review, ledger, and PR evidence. Future `opencode-profile` and `mms-runner` adapters should consume the same packet.
 
-Notify Feishu after a PR or MR is created:
+Notify Feishu after a PR or MR is created.
+
+Clean up merged worktree folders after a PR or MR is merged:
+
+```bash
+npm run level-up -- cleanup-worktrees --repo /path/to/repo --base-ref origin/main --execute
+```
+
+The cleanup command skips the current worktree, protected branches, dirty worktrees, and worktrees whose HEAD is not already merged into the base ref. Without `--execute`, it only reports what would be removed.
 
 Run the optional `redline-guard` audit after a PR/MR exists:
 

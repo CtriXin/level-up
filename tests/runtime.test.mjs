@@ -16,6 +16,7 @@ import { generateRunnerPacket } from "../src/runner.mjs";
 import { reviewExperiment } from "../src/self-review.mjs";
 import { selectNextCandidate } from "../src/strategy.mjs";
 import { generateWorkPack } from "../src/work-pack.mjs";
+import { cleanupMergedWorktrees } from "../src/worktree-cleanup.mjs";
 
 function sh(cwd, command, args) {
   const result = spawnSync(command, args, {
@@ -94,6 +95,26 @@ test("createWorktree creates an isolated branch and updates state", () => {
   assert.match(worktree.branch, /^level-up\//);
   assert.match(worktree.worktreePath, /level-up-worktrees/);
   assert.equal(worktree.state.status, "worktree-ready");
+});
+
+test("cleanupMergedWorktrees removes clean merged non-current worktrees only when executed", () => {
+  const repo = fixtureRepo();
+  const extraRoot = mkdtempSync(join(tmpdir(), "level-up-cleanup-"));
+  const worktreePath = join(extraRoot, "merged-worktree");
+  sh(repo, "git", ["branch", "cleanup-merged"]);
+  sh(repo, "git", ["worktree", "add", worktreePath, "cleanup-merged"]);
+
+  const dryRun = cleanupMergedWorktrees(repo, { baseRef: "HEAD" });
+  const dryRunEntry = dryRun.worktrees.find((entry) => entry.branch === "cleanup-merged");
+  assert.equal(dryRunEntry.removable, true);
+  assert.equal(dryRunEntry.removed, false);
+  assert.equal(existsSync(worktreePath), true);
+
+  const executed = cleanupMergedWorktrees(repo, { baseRef: "HEAD", execute: true });
+  const executedEntry = executed.worktrees.find((entry) => entry.branch === "cleanup-merged");
+  assert.equal(executedEntry.removable, true);
+  assert.equal(executedEntry.removed, true);
+  assert.equal(existsSync(worktreePath), false);
 });
 
 test("appendLedger records rounds and stops at max rounds", () => {
