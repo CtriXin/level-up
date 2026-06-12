@@ -48,3 +48,20 @@ and "the human can see exactly what changed."
 
 Autopilot may push branches and open PRs. It must not merge, deploy, or mutate
 production without explicit approval.
+
+## Post-merge Cleanup
+
+After an approved PR/MR is merged, run `level-up post-merge` to reclaim clean
+merged worktrees and record the result. This is a post-merge housekeeping step,
+not permission for level-up to merge by itself.
+
+```bash
+npm run level-up -- post-merge --repo /path/to/repo --base-ref origin/main \
+  --run /path/to/project/.level-up/runs/<run-id> --execute --delete-branches
+```
+
+The command reuses `cleanup-worktrees` safety checks: skip current worktree,
+dirty worktree, protected branch, and HEADs not merged into the base ref. When a
+run or output directory is provided, it writes `POST_MERGE_CLEANUP.zh.md` and
+`post-merge-cleanup.json` for the user-readable report and machine-readable
+audit trail.

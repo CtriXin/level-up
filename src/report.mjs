@@ -47,6 +47,7 @@ function loadArtifacts(runRoot) {
     autopilotSummary: readOptionalJson(join(runRoot, "autopilot-summary.json")),
     prPack: readOptionalJson(join(runRoot, "pr", "manifest.json")),
     redline: readOptionalJson(join(runRoot, "redline", "manifest.json")),
+    postMerge: readOptionalJson(join(runRoot, "post-merge-cleanup.json")),
     devLoops: ["baseline", "experiment", "final"]
       .map((phase) => readOptionalJson(join(runRoot, `dev-loop-${phase}.json`)))
       .filter(Boolean),
@@ -83,7 +84,7 @@ function normalizeLinks(options) {
   };
 }
 
-function renderZhReport({ runRoot, goal, state, scan, ideas, workPack, runner, autopilotSummary, prPack, redline, devLoops, ledger, manifest }) {
+function renderZhReport({ runRoot, goal, state, scan, ideas, workPack, runner, autopilotSummary, prPack, redline, postMerge, devLoops, ledger, manifest }) {
   const kept = ledger.filter((entry) => entry.status === "keep");
   const discarded = ledger.filter((entry) => entry.status === "discard");
   const crashed = ledger.filter((entry) => entry.status === "crash");
@@ -138,9 +139,13 @@ ${renderRedline(redline)}
 
 ${manifest.notifyStatus}
 
+## Post-merge cleanup
+
+${renderPostMerge(postMerge)}
+
 ## 关键产物
 
-${renderArtifacts({ runRoot, workPack, runner, prPack, redline })}
+${renderArtifacts({ runRoot, workPack, runner, prPack, redline, postMerge })}
 
 ## 下一步
 
@@ -250,7 +255,20 @@ function renderRedline(redline) {
   return lines.join("\n");
 }
 
-function renderArtifacts({ runRoot, workPack, runner, prPack, redline }) {
+function renderPostMerge(postMerge) {
+  if (!postMerge) return "- 未运行 post-merge cleanup；PR/MR merge 后可执行 `level-up post-merge`。";
+
+  return [
+    `- status: \`${postMerge.status}\``,
+    `- repo: \`${postMerge.repo}\``,
+    `- baseRef: \`${postMerge.baseRef}\``,
+    `- removed: \`${postMerge.summary?.removed ?? 0}\``,
+    `- branchDeleted: \`${postMerge.summary?.branchDeleted ?? 0}\``,
+    `- skipped: \`${postMerge.summary?.skipped ?? 0}\``
+  ].join("\n");
+}
+
+function renderArtifacts({ runRoot, workPack, runner, prPack, redline, postMerge }) {
   const lines = [`- run root: \`${runRoot}\``];
   if (workPack?.files?.spec) {
     lines.push(`- spec: \`${workPack.files.spec}\``);
@@ -266,6 +284,9 @@ function renderArtifacts({ runRoot, workPack, runner, prPack, redline }) {
   }
   if (redline?.files?.manifest) {
     lines.push(`- redline manifest: \`${redline.files.manifest}\``);
+  }
+  if (postMerge?.files?.report) {
+    lines.push(`- post-merge cleanup: \`${postMerge.files.report}\``);
   }
   return lines.join("\n");
 }
