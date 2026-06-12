@@ -264,6 +264,7 @@ function renderPostMerge(postMerge) {
     `- baseRef: \`${postMerge.baseRef}\``,
     `- removed: \`${postMerge.summary?.removed ?? 0}\``,
     `- branchDeleted: \`${postMerge.summary?.branchDeleted ?? 0}\``,
+    `- branchPruned: \`${postMerge.summary?.branchPruned ?? 0}\``,
     `- skipped: \`${postMerge.summary?.skipped ?? 0}\``
   ].join("\n");
 }

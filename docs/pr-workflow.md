@@ -57,11 +57,13 @@ not permission for level-up to merge by itself.
 
 ```bash
 npm run level-up -- post-merge --repo /path/to/repo --base-ref origin/main \
-  --run /path/to/project/.level-up/runs/<run-id> --execute --delete-branches
+  --run /path/to/project/.level-up/runs/<run-id> --execute --delete-branches \
+  --prune-branches --branch-prefix codex/
 ```
 
 The command reuses `cleanup-worktrees` safety checks: skip current worktree,
 dirty worktree, protected branch, and HEADs not merged into the base ref. When a
 run or output directory is provided, it writes `POST_MERGE_CLEANUP.zh.md` and
 `post-merge-cleanup.json` for the user-readable report and machine-readable
-audit trail.
+audit trail. Branch pruning is off by default; enable it only for merged
+agent-owned local branch prefixes such as `codex/`.

@@ -2,18 +2,28 @@ import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { ensureDir, VERSION, writeJson } from "./runtime.mjs";
 import { cleanupMergedWorktrees } from "./worktree-cleanup.mjs";
+import { pruneMergedBranches } from "./branch-prune.mjs";
 
 export function runPostMergeCleanup(options = {}) {
   const repo = options.repo || ".";
   const baseRef = options.baseRef || "origin/main";
   const execute = Boolean(options.execute);
   const deleteBranches = Boolean(options.deleteBranches);
+  const pruneBranches = Boolean(options.pruneBranches);
+  const branchPrefix = options.branchPrefix ?? "codex/";
   const outputDir = options.outputDir ? resolve(options.outputDir) : null;
   const cleanup = cleanupMergedWorktrees(repo, {
     baseRef,
     execute,
     deleteBranches
   });
+  const branchPrune = pruneBranches
+    ? pruneMergedBranches(repo, {
+      baseRef,
+      execute,
+      branchPrefix
+    })
+    : null;
 
   const manifest = {
     version: VERSION,
@@ -23,13 +33,17 @@ export function runPostMergeCleanup(options = {}) {
     baseRef,
     execute,
     deleteBranches,
-    status: cleanup.removed || cleanup.branchDeleted ? "cleaned" : "checked",
+    pruneBranches,
+    branchPrefix,
+    status: cleanup.removed || cleanup.branchDeleted || branchPrune?.deleted ? "cleaned" : "checked",
     summary: {
       removed: cleanup.removed,
       branchDeleted: cleanup.branchDeleted,
+      branchPruned: branchPrune?.deleted ?? 0,
       skipped: cleanup.skipped
     },
     cleanup,
+    branchPrune,
     files: {}
   };
 
@@ -51,14 +65,21 @@ export function renderPostMergeCleanup(manifest) {
 - baseRef: \`${manifest.baseRef}\`
 - mode: ${manifest.execute ? "execute" : "dry-run"}
 - deleteBranches: \`${manifest.deleteBranches}\`
+- pruneBranches: \`${manifest.pruneBranches}\`
+- branchPrefix: \`${manifest.branchPrefix}\`
 - status: \`${manifest.status}\`
 - removed: \`${manifest.summary.removed}\`
 - branchDeleted: \`${manifest.summary.branchDeleted}\`
+- branchPruned: \`${manifest.summary.branchPruned}\`
 - skipped: \`${manifest.summary.skipped}\`
 
 ## Worktrees
 
 ${renderWorktrees(manifest.cleanup.worktrees)}
+
+## Branch prune
+
+${renderBranchPrune(manifest.branchPrune)}
 
 ## Safety
 
@@ -82,6 +103,23 @@ function renderWorktrees(worktrees = []) {
       const reasons = entry.reasons?.length ? `；原因：${entry.reasons.join("、")}` : "";
       const branchStatus = entry.branchDeleted ? "；branch deleted" : "";
       return `- \`${branch}\` ${status}${branchStatus}${reasons}：\`${entry.worktree}\``;
+    })
+    .join("\n");
+}
+
+function renderBranchPrune(branchPrune) {
+  if (!branchPrune) return "- 未启用 branch prune。";
+  if (!branchPrune.branches.length) return "- 未发现匹配 branch。";
+
+  return branchPrune.branches
+    .map((entry) => {
+      const status = entry.deleted
+        ? "deleted"
+        : entry.removable
+          ? "removable"
+          : "skipped";
+      const reasons = entry.reasons?.length ? `；原因：${entry.reasons.join("、")}` : "";
+      return `- \`${entry.name}\` ${status}${reasons}`;
     })
     .join("\n");
 }

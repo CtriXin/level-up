@@ -160,6 +160,35 @@ test("runPostMergeCleanup writes a readable cleanup report", () => {
   assert.equal(manifest.summary.skipped, 1);
 });
 
+test("runPostMergeCleanup prunes merged prefixed branches only when explicit", () => {
+  const repo = fixtureRepo();
+  sh(repo, "git", ["branch", "codex/prune-merged"]);
+
+  const dryRun = runPostMergeCleanup({
+    repo,
+    baseRef: "HEAD",
+    pruneBranches: true,
+    branchPrefix: "codex/"
+  });
+  const dryRunEntry = dryRun.branchPrune.branches.find((entry) => entry.name === "codex/prune-merged");
+  assert.equal(dryRunEntry.removable, true);
+  assert.equal(dryRunEntry.deleted, false);
+  assert.match(sh(repo, "git", ["branch", "--list", "codex/prune-merged"]), /codex\/prune-merged/);
+
+  const executed = runPostMergeCleanup({
+    repo,
+    baseRef: "HEAD",
+    execute: true,
+    pruneBranches: true,
+    branchPrefix: "codex/"
+  });
+  const executedEntry = executed.branchPrune.branches.find((entry) => entry.name === "codex/prune-merged");
+  assert.equal(executedEntry.removable, true);
+  assert.equal(executedEntry.deleted, true);
+  assert.equal(executed.summary.branchPruned, 1);
+  assert.equal(sh(repo, "git", ["branch", "--list", "codex/prune-merged"]), "");
+});
+
 test("appendLedger records rounds and stops at max rounds", () => {
   const repo = fixtureRepo();
   const result = createRun({ target: repo, goal: "Try two experiments", maxRounds: 1 });
