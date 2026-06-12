@@ -408,8 +408,12 @@ test("runAutopilot executes a validation repair apply after validation failure",
   const repairDoc = readFileSync(second.apply.targetPath, "utf8");
   assert.match(repairDoc, /Trigger: validation-failed/);
   assert.match(repairDoc, /Previous candidate: metric-/);
+  assert.match(repairDoc, /## Proposal/);
+  assert.match(repairDoc, /Mode: write-file/);
+  assert.match(repairDoc, /Objective: Restore the failed validation path/);
   assert.match(repairDoc, /phase: experiment/);
   assert.match(repairDoc, /command: git diff --check/);
+  assert.match(repairDoc, /repeatsFailedApply: false/);
 });
 
 test("runAutopilot executes a review blocker repair apply after self-review blocks", () => {
@@ -442,7 +446,11 @@ test("runAutopilot executes a review blocker repair apply after self-review bloc
   const repairDoc = readFileSync(second.apply.targetPath, "utf8");
   assert.match(repairDoc, /Trigger: review-blocked/);
   assert.match(repairDoc, /Previous candidate: metric-/);
+  assert.match(repairDoc, /## Proposal/);
+  assert.match(repairDoc, /Mode: write-file/);
+  assert.match(repairDoc, /Objective: Remove the blocker/);
   assert.match(repairDoc, /blocker:/);
+  assert.match(repairDoc, /secretRedaction: true/);
   assert.doesNotMatch(repairDoc, /ghp_[A-Za-z0-9_]{20,}/);
 });
 
@@ -481,6 +489,9 @@ test("selectNextCandidate generates a validation repair candidate after validati
   assert.equal(strategy.manifest.syntheticCandidate, true);
   assert.equal(strategy.manifest.adaptation.trigger, "validation-failed");
   assert.equal(strategy.manifest.adaptation.action, "generate-validation-repair-candidate");
+  assert.equal(strategy.manifest.adaptation.proposal.kind, "validation-repair");
+  assert.equal(strategy.manifest.adaptation.proposal.mode, "write-file");
+  assert.equal(strategy.manifest.adaptation.proposal.safety.repeatsFailedApply, false);
   assert.equal(strategy.manifest.adaptation.apply.mode, "write-file");
   assert.equal(strategy.manifest.adaptation.apply.targetFile, "proof/repair-{roundPadded}-{candidateId}.md");
   assert.ok(existsSync(strategy.manifest.files.manifest));
@@ -521,6 +532,9 @@ test("selectNextCandidate generates a review blocker repair candidate after revi
   assert.equal(strategy.manifest.syntheticCandidate, true);
   assert.equal(strategy.manifest.adaptation.trigger, "review-blocked");
   assert.equal(strategy.manifest.adaptation.action, "generate-review-blocker-repair-candidate");
+  assert.equal(strategy.manifest.adaptation.proposal.kind, "review-blocker-repair");
+  assert.equal(strategy.manifest.adaptation.proposal.mode, "write-file");
+  assert.equal(strategy.manifest.adaptation.proposal.safety.rawOutputIncluded, false);
   assert.equal(strategy.manifest.adaptation.apply.mode, "write-file");
   assert.equal(strategy.manifest.adaptation.apply.targetFile, "proof/repair-{roundPadded}-{candidateId}.md");
   assert.ok(existsSync(strategy.manifest.files.manifest));

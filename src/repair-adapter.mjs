@@ -1,26 +1,97 @@
-export function buildRepairApply(trigger, lastResult) {
+export function buildRepairPlan(trigger, lastResult) {
+  const proposal = buildRepairProposal(trigger, lastResult);
   return {
+    proposal,
+    apply: proposalToApply(proposal, lastResult)
+  };
+}
+
+export function buildRepairApply(trigger, lastResult) {
+  return buildRepairPlan(trigger, lastResult).apply;
+}
+
+function buildRepairProposal(trigger, lastResult) {
+  const target = repairTarget(trigger);
+  const evidence = evidenceLines(trigger, lastResult);
+  return {
+    id: `${target.kind}-proposal`,
+    trigger,
+    kind: target.kind,
     mode: "write-file",
     targetFile: "proof/repair-{roundPadded}-{candidateId}.md",
-    content: [
-      "# Adaptive repair candidate",
-      "",
-      `Trigger: ${trigger}`,
-      `Previous round: ${lastResult?.round ?? "unknown"}`,
-      `Previous candidate: ${lastResult?.candidateId ?? "unknown"}`,
-      `Previous decision: ${lastResult?.decision ?? "unknown"}`,
-      "Round: {round}",
-      "Candidate: {candidateId}",
-      "",
-      "## Evidence",
-      "",
-      ...evidenceLines(trigger, lastResult),
-      "",
-      "## Next action",
-      "",
-      "Use this bounded repair artifact to drive the next adapter step without repeating the failed apply input.",
-      ""
-    ].join("\n")
+    objective: target.objective,
+    rationale: target.rationale,
+    evidence,
+    safety: {
+      repeatsFailedApply: false,
+      rawOutputIncluded: false,
+      secretRedaction: true
+    }
+  };
+}
+
+function proposalToApply(proposal, lastResult) {
+  return {
+    mode: proposal.mode,
+    targetFile: proposal.targetFile,
+    content: renderRepairArtifact(proposal, lastResult)
+  };
+}
+
+function renderRepairArtifact(proposal, lastResult) {
+  return [
+    "# Adaptive repair candidate",
+    "",
+    `Trigger: ${proposal.trigger}`,
+    `Previous round: ${lastResult?.round ?? "unknown"}`,
+    `Previous candidate: ${lastResult?.candidateId ?? "unknown"}`,
+    `Previous decision: ${lastResult?.decision ?? "unknown"}`,
+    "Round: {round}",
+    "Candidate: {candidateId}",
+    "",
+    "## Proposal",
+    "",
+    `Mode: ${proposal.mode}`,
+    `Target: ${proposal.targetFile}`,
+    `Objective: ${proposal.objective}`,
+    `Rationale: ${proposal.rationale}`,
+    "",
+    "## Evidence",
+    "",
+    ...proposal.evidence,
+    "",
+    "## Safety",
+    "",
+    `- repeatsFailedApply: ${proposal.safety.repeatsFailedApply}`,
+    `- rawOutputIncluded: ${proposal.safety.rawOutputIncluded}`,
+    `- secretRedaction: ${proposal.safety.secretRedaction}`,
+    "",
+    "## Next action",
+    "",
+    "Use this bounded repair proposal to drive the next adapter step without repeating the failed apply input.",
+    ""
+  ].join("\n");
+}
+
+function repairTarget(trigger) {
+  if (trigger === "validation-failed") {
+    return {
+      kind: "validation-repair",
+      objective: "Restore the failed validation path before broader mutation.",
+      rationale: "A repair round should focus on the failed local gate and preserve the gate instead of weakening it."
+    };
+  }
+  if (trigger === "review-blocked") {
+    return {
+      kind: "review-blocker-repair",
+      objective: "Remove the blocker that made the previous experiment unsafe to keep.",
+      rationale: "A repair round should address the specific self-review blocker before trying another broad candidate."
+    };
+  }
+  return {
+    kind: "generic-repair",
+    objective: "Capture bounded repair evidence for the next attempt.",
+    rationale: "A repair round needs explicit scope before it can safely mutate the worktree."
   };
 }
 

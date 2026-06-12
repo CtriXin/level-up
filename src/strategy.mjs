@@ -1,6 +1,6 @@
 import { join, resolve } from "node:path";
 import { ensureDir, VERSION, writeJson } from "./runtime.mjs";
-import { buildRepairApply } from "./repair-adapter.mjs";
+import { buildRepairPlan } from "./repair-adapter.mjs";
 
 export function selectNextCandidate(runRootInput, options = {}) {
   const runRoot = resolve(runRootInput);
@@ -65,11 +65,13 @@ function buildAdaptation(lastResult) {
     };
   }
   if (checks.validationPassed === false) {
+    const repair = buildRepairPlan("validation-failed", lastResult);
     return {
       trigger: "validation-failed",
       action: "generate-validation-repair-candidate",
       reason: "previous validation failed; next candidate should repair the validation path before broader mutation",
-      apply: buildRepairApply("validation-failed", lastResult),
+      proposal: repair.proposal,
+      apply: repair.apply,
       candidate: repairCandidate({
         id: "adaptive-validation-repair",
         title: "Repair validation failure before continuing",
@@ -82,11 +84,13 @@ function buildAdaptation(lastResult) {
     };
   }
   if (checks.reviewPassed === false) {
+    const repair = buildRepairPlan("review-blocked", lastResult);
     return {
       trigger: "review-blocked",
       action: "generate-review-blocker-repair-candidate",
       reason: "self-review blocked the previous experiment; next candidate should address the blocker directly",
-      apply: buildRepairApply("review-blocked", lastResult),
+      proposal: repair.proposal,
+      apply: repair.apply,
       candidate: repairCandidate({
         id: "adaptive-review-blocker-repair",
         title: "Address self-review blocker",
