@@ -114,7 +114,23 @@ test("cleanupMergedWorktrees removes clean merged non-current worktrees only whe
   const executedEntry = executed.worktrees.find((entry) => entry.branch === "cleanup-merged");
   assert.equal(executedEntry.removable, true);
   assert.equal(executedEntry.removed, true);
+  assert.equal(executedEntry.branchDeleted, false);
   assert.equal(existsSync(worktreePath), false);
+  assert.match(sh(repo, "git", ["branch", "--list", "cleanup-merged"]), /cleanup-merged/);
+
+  const branchDeletePath = join(extraRoot, "branch-delete-worktree");
+  sh(repo, "git", ["branch", "cleanup-delete"]);
+  sh(repo, "git", ["worktree", "add", branchDeletePath, "cleanup-delete"]);
+  const branchDelete = cleanupMergedWorktrees(repo, {
+    baseRef: "HEAD",
+    execute: true,
+    deleteBranches: true
+  });
+  const branchDeleteEntry = branchDelete.worktrees.find((entry) => entry.branch === "cleanup-delete");
+  assert.equal(branchDeleteEntry.removed, true);
+  assert.equal(branchDeleteEntry.branchDeleted, true);
+  assert.equal(existsSync(branchDeletePath), false);
+  assert.equal(sh(repo, "git", ["branch", "--list", "cleanup-delete"]), "");
 });
 
 test("appendLedger records rounds and stops at max rounds", () => {

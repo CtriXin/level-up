@@ -7,6 +7,7 @@ export function cleanupMergedWorktrees(repoInput = ".", options = {}) {
   const repo = repoInput || ".";
   const baseRef = options.baseRef || "origin/main";
   const execute = Boolean(options.execute);
+  const deleteBranches = Boolean(options.deleteBranches);
   const entries = parseWorktreeList(runGit(repo, ["worktree", "list", "--porcelain"]).stdout);
   const currentTopLevel = safeRealpath(runGit(repo, ["rev-parse", "--show-toplevel"]).stdout);
   const results = [];
@@ -26,12 +27,20 @@ export function cleanupMergedWorktrees(repoInput = ".", options = {}) {
       baseRef,
       removable,
       removed: false,
+      branchDeleted: false,
       reasons
     };
 
     if (execute && removable) {
       runGit(repo, ["worktree", "remove", entry.worktree]);
       result.removed = true;
+      if (deleteBranches && branchName) {
+        const deletion = runGit(repo, ["branch", "-d", branchName], { allowFailure: true });
+        result.branchDeleted = deletion.status === 0;
+        if (deletion.status !== 0) {
+          result.branchDeleteError = deletion.stderr || deletion.stdout || "branch delete failed";
+        }
+      }
     }
     results.push(result);
   }
@@ -39,8 +48,10 @@ export function cleanupMergedWorktrees(repoInput = ".", options = {}) {
   return {
     version: VERSION,
     execute,
+    deleteBranches,
     baseRef,
     removed: results.filter((result) => result.removed).length,
+    branchDeleted: results.filter((result) => result.branchDeleted).length,
     removable: results.filter((result) => result.removable).length,
     skipped: results.filter((result) => !result.removable).length,
     worktrees: results
