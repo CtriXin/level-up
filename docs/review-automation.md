@@ -52,10 +52,11 @@ changes are involved, review automation must require:
 
 ## Redline Guard Adapter
 
-`level-up` can call sibling `redline-guard` as an optional adapter:
+`level-up` calls sibling `redline-guard` as the final pre-merge adapter after a PR/MR exists:
 
-- Standalone: `level-up redline --run <run-root> --url <pr-or-mr-url>`.
+- Final gate: `level-up redline-final --run <run-root> --url <pr-or-mr-url>`.
+- Evidence-only: `level-up redline --run <run-root> --url <pr-or-mr-url>`.
 - Report bridge: `level-up report --run <run-root> --link <pr-or-mr-url> --redline`.
 - Output: `<run-root>/redline/manifest.json`, `audit-result.json`, and `audit-result.md`.
 
-The adapter is optional by design. Missing `redline-guard` records `skipped`; it does not block the local experiment loop.
+`redline-final` is not an approval action. It never approves, merges, deploys, force-pushes, or edits product code. Only `mergeable` passes `finalGateStatus`; `needs-review`, `blocked`, `unknown`, missing URL, or adapter failure must stop before merge. `--comment` is explicit opt-in only. Digger artifacts can be supplied with `--digger-run`; external LLM audit artifacts can be supplied with `--llm-audit`.

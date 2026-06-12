@@ -33,14 +33,16 @@ When triggered this way, the agent owns init, scan, interview when needed, runne
 10. Validate through dev-loop phases, evaluate, review, then keep/discard/crash.
 11. Record every result in the ledger.
 12. Generate a PR/MR packet with PR body, bug-review request, and visual evidence checklist.
-13. Generate `REPORT.zh.md` so the user can understand what happened without reading raw artifacts.
-14. Stop before merge, deploy, or irreversible actions.
-15. After a human-approved PR/MR is merged, run `level-up post-merge` to reclaim clean merged worktrees and record `POST_MERGE_CLEANUP.zh.md` / `post-merge-cleanup.json`; use `--prune-branches --branch-prefix codex/` only for merged agent-owned local branches.
+13. After the PR/MR exists, run `level-up redline-final --run <run-root> --url <pr-or-mr-url>` as the final pre-merge gate. Supply Digger evidence with `--digger-run` and external LLM audit with `--llm-audit` when available.
+14. Generate `REPORT.zh.md` so the user can understand what happened without reading raw artifacts.
+15. Stop before merge, deploy, or irreversible actions. Only `redline-final` decision `mergeable` may be treated as final gate pass; `needs-review`, `blocked`, `unknown`, missing URL, or adapter failure stops before merge.
+16. After a human-approved PR/MR is merged, run `level-up post-merge` to reclaim clean merged worktrees and record `POST_MERGE_CLEANUP.zh.md` / `post-merge-cleanup.json`; use `--prune-branches --branch-prefix codex/` only for merged agent-owned local branches.
 
 ## Hard Gates
 
 - No global config changes.
 - No merge or deploy without human approval.
+- No redline approve/merge/deploy/force-push behavior; `--comment` is explicit opt-in only.
 - No secret, billing, ads, or production data mutation.
 - No silent skip of hard gates.
 - No destructive cleanup in the user's current worktree.

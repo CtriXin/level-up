@@ -8,6 +8,7 @@ export function runRedlineAudit(runRootInput, options = {}) {
   const runRoot = resolve(runRootInput);
   const goal = readJson(join(runRoot, "goal.json"));
   const url = options.url || options.link || options.prLink || options.mrLink || "";
+  const finalGate = Boolean(options.finalGate);
   const outputDir = options.outputDir ? resolve(options.outputDir) : join(runRoot, "redline");
   ensureDir(outputDir);
 
@@ -20,6 +21,15 @@ export function runRedlineAudit(runRootInput, options = {}) {
     repo: goal.target.path,
     url,
     outputDir,
+    finalGate,
+    commentRequested: Boolean(options.comment),
+    safety: {
+      approve: false,
+      merge: false,
+      deploy: false,
+      forcePush: false,
+      commentRequiresExplicitFlag: true
+    },
     files: {
       resultJson: join(outputDir, "audit-result.json"),
       resultMarkdown: join(outputDir, "audit-result.md"),
@@ -29,6 +39,7 @@ export function runRedlineAudit(runRootInput, options = {}) {
 
   if (!url) {
     manifest.reason = "missing_pr_or_mr_url";
+    manifest.finalGateStatus = finalGate ? "blocked" : "skipped";
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }
@@ -36,22 +47,25 @@ export function runRedlineAudit(runRootInput, options = {}) {
   const command = resolveRedlineCommand(options);
   if (!command) {
     manifest.reason = "redline_guard_not_found";
+    manifest.finalGateStatus = finalGate ? "blocked" : "skipped";
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }
 
   const auditArgs = [
     "audit",
-    "--url",
-    url,
-    "--repo",
-    goal.target.path,
-    "--out",
-    outputDir
+    "--url", url,
+    "--repo", goal.target.path,
+    "--out", outputDir
   ];
+  const evidence = options.evidence === false ? null : (options.evidence || runRoot);
+  if (evidence) auditArgs.push("--evidence", evidence);
+  if (options.diggerRun) auditArgs.push("--digger-run", options.diggerRun);
+  if (options.llmAudit) auditArgs.push("--llm-audit", options.llmAudit);
   if (options.validate) auditArgs.push("--validate");
   if (options.notify) auditArgs.push("--notify");
   if (options.actions) auditArgs.push("--actions");
+  if (options.comment) auditArgs.push("--comment");
   if (options.reportUrl) auditArgs.push("--report-url", options.reportUrl);
   if (options.webhookUrl) auditArgs.push("--webhook-url", options.webhookUrl);
 
@@ -72,6 +86,7 @@ export function runRedlineAudit(runRootInput, options = {}) {
   if (result.error) {
     manifest.status = command.optional && result.error.code === "ENOENT" ? "skipped" : "failed";
     manifest.reason = result.error.code || result.error.message;
+    manifest.finalGateStatus = finalGate ? "blocked" : manifest.status;
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }
@@ -79,15 +94,24 @@ export function runRedlineAudit(runRootInput, options = {}) {
   if (result.status !== 0) {
     manifest.status = "failed";
     manifest.reason = "redline_guard_exit_nonzero";
+    manifest.finalGateStatus = "blocked";
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }
 
   manifest.status = "pass";
   manifest.result = readOptionalJson(manifest.files.resultJson);
-  manifest.decision = manifest.result?.decision || null;
+  manifest.decision = normalizeDecision(manifest.result);
+  manifest.finalGateStatus = manifest.decision === "mergeable" ? "pass" : "blocked";
   writeJson(manifest.files.manifest, manifest);
   return manifest;
+}
+
+export function runRedlineFinalGate(runRootInput, options = {}) {
+  return runRedlineAudit(runRootInput, {
+    ...options,
+    finalGate: true
+  });
 }
 
 export function resolveRedlineCommand(options = {}) {
@@ -115,3 +139,14 @@ function readOptionalJson(path) {
     return null;
   }
 }
+
+function normalizeDecision(result) {
+  const value = result?.decision || result?.result?.decision || null;
+  if (!value) return "unknown";
+  const normalized = String(value).toLowerCase();
+  return ["mergeable", "needs-review", "blocked", "unknown"].includes(normalized)
+    ? normalized
+    : "unknown";
+}
+
+export default runRedlineAudit;

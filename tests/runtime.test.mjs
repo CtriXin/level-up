@@ -9,7 +9,7 @@ import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { buildFeishuPostPayload, notifyFeishu } from "../src/notify.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
-import { runRedlineAudit } from "../src/redline.mjs";
+import { runRedlineAudit, runRedlineFinalGate } from "../src/redline.mjs";
 import { generateRunReport } from "../src/report.mjs";
 import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
 import { generateRunnerPacket } from "../src/runner.mjs";
@@ -701,6 +701,9 @@ writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
   });
   assert.equal(redline.status, "pass");
   assert.equal(redline.decision, "mergeable");
+  assert.equal(redline.finalGateStatus, "pass");
+  assert.match(redline.command, /--evidence/);
+  assert.doesNotMatch(redline.command, /--comment/);
   assert.ok(existsSync(redline.files.manifest));
 
   const report = generateRunReport(result.runRoot, {
@@ -709,4 +712,19 @@ writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
   const reportText = readFileSync(report.files.report, "utf8");
   assert.match(reportText, /Redline Guard 预审/);
   assert.match(reportText, /mergeable/);
+});
+
+test("runRedlineFinalGate blocks when PR or MR URL is missing", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Require redline evidence before merge",
+    metric: "Increase final gate confidence"
+  });
+
+  const redline = runRedlineFinalGate(result.runRoot);
+  assert.equal(redline.status, "skipped");
+  assert.equal(redline.reason, "missing_pr_or_mr_url");
+  assert.equal(redline.finalGateStatus, "blocked");
+  assert.ok(existsSync(redline.files.manifest));
 });
