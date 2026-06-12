@@ -64,7 +64,7 @@ Usage:
   level-up redline --run <run-root> --url <pr-or-mr-url> [--validate] [--notify]
   level-up report --run <run-root> [--format zh] [--link <pr-or-mr-url>] [--notify-status <text>]
   level-up notify --channel feishu --repo <name> --branch <source -> target> --title <title> --link <url> [--dry-run]
-  level-up cleanup-worktrees [--repo <repo>] [--base-ref origin/main] [--execute]
+  level-up cleanup-worktrees [--repo <repo>] [--base-ref origin/main] [--execute] [--delete-branches]
   level-up status --run <run-root>
 
 L3 local autopilot stops before merge, deploy, and irreversible actions.`;
@@ -244,7 +244,8 @@ async function main() {
   if (command === "cleanup-worktrees") {
     print(cleanupMergedWorktrees(args.repo === true ? "." : args.repo || ".", {
       baseRef: args["base-ref"] === true ? null : args["base-ref"],
-      execute: Boolean(args.execute)
+      execute: Boolean(args.execute),
+      deleteBranches: Boolean(args["delete-branches"])
     }));
     return;
   }

@@ -124,7 +124,7 @@ Clean up merged worktree folders after a PR or MR is merged:
 npm run level-up -- cleanup-worktrees --repo /path/to/repo --base-ref origin/main --execute
 ```
 
-The cleanup command skips the current worktree, protected branches, dirty worktrees, and worktrees whose HEAD is not already merged into the base ref. Without `--execute`, it only reports what would be removed.
+The cleanup command skips the current worktree, protected branches, dirty worktrees, and worktrees whose HEAD is not already merged into the base ref. Without `--execute`, it only reports what would be removed. Add `--delete-branches` only when the local merged branch reference should be removed after the worktree folder is removed.
 
 Run the optional `redline-guard` audit after a PR/MR exists:
 
