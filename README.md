@@ -42,7 +42,7 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `strategy`: choose the next untried candidate, adapt after failed rounds, generate repair candidates with safe apply plans, and record why.
 - `metric`: scoring for performance, UI, tests, code health, or custom goals.
 - `evaluator`: turn apply, validation, review, and worktree delta into keep/discard evidence for the next strategy step.
-- `repair-adapter`: turn validation/review failure evidence into bounded safe repair apply plans.
+- `repair-adapter`: turn validation/review failure evidence into targeted repair proposals and bounded safe apply plans.
 - `review`: self-review or review-hub style independent review.
 - `recovery`: nsr-lite milestones, next action, and resume state.
 - `policy`: hard gates, forbidden actions, and human approval boundaries.
@@ -75,7 +75,7 @@ Run the practical L3 loop:
 npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> --execute --pr-pack
 ```
 
-`level-up run` ensures scan, ideas, work-pack, baseline validation, an isolated worktree, experiment/final validation, deterministic self-review, ledger recording, and optional PR evidence. If the round makes no change or fails validation/review, it records `discard` instead of pretending the attempt worked. Adaptive rounds can turn validation/review failures into focused repair candidates; synthetic repair candidates use their own safe apply plan instead of repeating the failed input.
+`level-up run` ensures scan, ideas, work-pack, baseline validation, an isolated worktree, experiment/final validation, deterministic self-review, ledger recording, and optional PR evidence. If the round makes no change or fails validation/review, it records `discard` instead of pretending the attempt worked. Adaptive rounds can turn validation/review failures into focused repair candidates; synthetic repair candidates use their own targeted repair proposal and safe apply plan instead of repeating the failed input.
 
 Generate the same loop with a user-readable Chinese report:
 
