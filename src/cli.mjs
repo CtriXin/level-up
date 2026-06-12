@@ -18,6 +18,7 @@ import { notifyFeishu } from "./notify.mjs";
 import { generateRunReport } from "./report.mjs";
 import { runRedlineAudit } from "./redline.mjs";
 import { cleanupMergedWorktrees } from "./worktree-cleanup.mjs";
+import runPostMergeCleanup from "./post-merge.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -65,6 +66,7 @@ Usage:
   level-up report --run <run-root> [--format zh] [--link <pr-or-mr-url>] [--notify-status <text>]
   level-up notify --channel feishu --repo <name> --branch <source -> target> --title <title> --link <url> [--dry-run]
   level-up cleanup-worktrees [--repo <repo>] [--base-ref origin/main] [--execute] [--delete-branches]
+  level-up post-merge [--repo <repo>] [--base-ref origin/main] [--run <run-root>] [--output-dir <dir>] [--execute] [--delete-branches]
   level-up status --run <run-root>
 
 L3 local autopilot stops before merge, deploy, and irreversible actions.`;
@@ -246,6 +248,19 @@ async function main() {
       baseRef: args["base-ref"] === true ? null : args["base-ref"],
       execute: Boolean(args.execute),
       deleteBranches: Boolean(args["delete-branches"])
+    }));
+    return;
+  }
+
+  if (command === "post-merge") {
+    print(runPostMergeCleanup({
+      repo: args.repo === true ? "." : args.repo || ".",
+      baseRef: args["base-ref"] === true ? null : args["base-ref"],
+      execute: Boolean(args.execute),
+      deleteBranches: Boolean(args["delete-branches"]),
+      outputDir: args["output-dir"] === true
+        ? null
+        : args["output-dir"] || (args.run === true ? null : args.run)
     }));
     return;
   }

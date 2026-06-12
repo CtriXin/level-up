@@ -17,6 +17,7 @@ import { reviewExperiment } from "../src/self-review.mjs";
 import { selectNextCandidate } from "../src/strategy.mjs";
 import { generateWorkPack } from "../src/work-pack.mjs";
 import { cleanupMergedWorktrees } from "../src/worktree-cleanup.mjs";
+import runPostMergeCleanup from "../src/post-merge.mjs";
 
 function sh(cwd, command, args) {
   const result = spawnSync(command, args, {
@@ -131,6 +132,32 @@ test("cleanupMergedWorktrees removes clean merged non-current worktrees only whe
   assert.equal(branchDeleteEntry.branchDeleted, true);
   assert.equal(existsSync(branchDeletePath), false);
   assert.equal(sh(repo, "git", ["branch", "--list", "cleanup-delete"]), "");
+});
+
+test("runPostMergeCleanup writes a readable cleanup report", () => {
+  const repo = fixtureRepo();
+  const outputDir = mkdtempSync(join(tmpdir(), "level-up-post-merge-"));
+
+  const result = runPostMergeCleanup({
+    repo,
+    baseRef: "HEAD",
+    outputDir
+  });
+
+  assert.equal(result.command, "post-merge");
+  assert.equal(result.status, "checked");
+  assert.equal(result.summary.removed, 0);
+  assert.equal(result.summary.skipped, 1);
+  assert.ok(existsSync(result.files.report));
+  assert.ok(existsSync(result.files.manifest));
+
+  const report = readFileSync(result.files.report, "utf8");
+  assert.match(report, /Post-merge cleanup/);
+  assert.match(report, /current worktree/);
+
+  const manifest = JSON.parse(readFileSync(result.files.manifest, "utf8"));
+  assert.equal(manifest.command, "post-merge");
+  assert.equal(manifest.summary.skipped, 1);
 });
 
 test("appendLedger records rounds and stops at max rounds", () => {

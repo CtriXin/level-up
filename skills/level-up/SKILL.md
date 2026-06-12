@@ -35,6 +35,7 @@ When triggered this way, the agent owns init, scan, interview when needed, runne
 12. Generate a PR/MR packet with PR body, bug-review request, and visual evidence checklist.
 13. Generate `REPORT.zh.md` so the user can understand what happened without reading raw artifacts.
 14. Stop before merge, deploy, or irreversible actions.
+15. After a human-approved PR/MR is merged, run `level-up post-merge` to reclaim clean merged worktrees and record `POST_MERGE_CLEANUP.zh.md` / `post-merge-cleanup.json`.
 
 ## Hard Gates
 
