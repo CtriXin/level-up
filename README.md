@@ -75,7 +75,7 @@ Run the practical L3 loop:
 npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> --execute --pr-pack
 ```
 
-`level-up run` ensures scan, ideas, work-pack, baseline validation, an isolated worktree, experiment/final validation, deterministic self-review, ledger recording, and optional PR evidence. If the round makes no change or fails validation/review, it records `discard` instead of pretending the attempt worked. Adaptive rounds can turn validation/review failures into focused repair candidates; synthetic repair candidates use their own targeted repair proposal and safe apply plan instead of repeating the failed input.
+`level-up run` ensures scan, ideas, work-pack, baseline validation, an isolated worktree, experiment/final validation, deterministic self-review, ledger recording, and optional PR evidence. If the round makes no change or fails validation/review, it records `discard` instead of pretending the attempt worked. Adaptive rounds can turn validation/review failures into focused repair candidates; synthetic repair candidates use their own targeted repair proposal and safe apply plan instead of repeating the failed input. A narrow validation repair can execute a safe command for `git diff --check` whitespace failures.
 
 Generate the same loop with a user-readable Chinese report:
 

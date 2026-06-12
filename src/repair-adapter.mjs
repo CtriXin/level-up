@@ -1,3 +1,5 @@
+const CLEAN_TRAILING_WHITESPACE_COMMAND = "node -e \"const { spawnSync } = require('child_process'); const fs = require('fs'); const check = spawnSync('git', ['diff', '--check'], { encoding: 'utf8' }); const files = [...new Set((check.stdout || '').split(/\\\\r?\\\\n/).map((line) => line.split(':')[0]).filter(Boolean))]; for (const file of files) { if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) continue; const data = fs.readFileSync(file, 'utf8'); const next = data.replace(/[ \\\\t]+$/gm, '').replace(/\\\\n{2,}$/g, '\\\\n'); if (next !== data) fs.writeFileSync(file, next); }\"";
+
 export function buildRepairPlan(trigger, lastResult) {
   const proposal = buildRepairProposal(trigger, lastResult);
   return {
@@ -11,14 +13,15 @@ export function buildRepairApply(trigger, lastResult) {
 }
 
 function buildRepairProposal(trigger, lastResult) {
-  const target = repairTarget(trigger);
+  const target = repairTarget(trigger, lastResult);
   const evidence = evidenceLines(trigger, lastResult);
   return {
     id: `${target.kind}-proposal`,
     trigger,
     kind: target.kind,
-    mode: "write-file",
-    targetFile: "proof/repair-{roundPadded}-{candidateId}.md",
+    mode: target.mode,
+    targetFile: target.targetFile,
+    command: target.command,
     objective: target.objective,
     rationale: target.rationale,
     evidence,
@@ -31,6 +34,12 @@ function buildRepairProposal(trigger, lastResult) {
 }
 
 function proposalToApply(proposal, lastResult) {
+  if (proposal.mode === "command") {
+    return {
+      mode: "command",
+      command: proposal.command
+    };
+  }
   return {
     mode: proposal.mode,
     targetFile: proposal.targetFile,
@@ -52,7 +61,7 @@ function renderRepairArtifact(proposal, lastResult) {
     "## Proposal",
     "",
     `Mode: ${proposal.mode}`,
-    `Target: ${proposal.targetFile}`,
+    `Target: ${proposal.targetFile ?? proposal.command ?? "none"}`,
     `Objective: ${proposal.objective}`,
     `Rationale: ${proposal.rationale}`,
     "",
@@ -73,10 +82,21 @@ function renderRepairArtifact(proposal, lastResult) {
   ].join("\n");
 }
 
-function repairTarget(trigger) {
+function repairTarget(trigger, lastResult) {
   if (trigger === "validation-failed") {
+    if (canCleanTrailingWhitespace(lastResult)) {
+      return {
+        kind: "validation-repair",
+        mode: "command",
+        command: CLEAN_TRAILING_WHITESPACE_COMMAND,
+        objective: "Remove trailing whitespace from changed files so git diff --check can pass.",
+        rationale: "The failed validation command is a formatting gate; cleaning whitespace preserves the gate instead of weakening it."
+      };
+    }
     return {
       kind: "validation-repair",
+      mode: "write-file",
+      targetFile: "proof/repair-{roundPadded}-{candidateId}.md",
       objective: "Restore the failed validation path before broader mutation.",
       rationale: "A repair round should focus on the failed local gate and preserve the gate instead of weakening it."
     };
@@ -84,15 +104,27 @@ function repairTarget(trigger) {
   if (trigger === "review-blocked") {
     return {
       kind: "review-blocker-repair",
+      mode: "write-file",
+      targetFile: "proof/repair-{roundPadded}-{candidateId}.md",
       objective: "Remove the blocker that made the previous experiment unsafe to keep.",
       rationale: "A repair round should address the specific self-review blocker before trying another broad candidate."
     };
   }
   return {
     kind: "generic-repair",
+    mode: "write-file",
+    targetFile: "proof/repair-{roundPadded}-{candidateId}.md",
     objective: "Capture bounded repair evidence for the next attempt.",
     rationale: "A repair round needs explicit scope before it can safely mutate the worktree."
   };
+}
+
+function canCleanTrailingWhitespace(lastResult) {
+  return failedValidationCommands(lastResult).some((command) => command.command === "git diff --check");
+}
+
+function failedValidationCommands(lastResult) {
+  return (lastResult?.validation ?? []).flatMap((phase) => failedCommands(phase));
 }
 
 function evidenceLines(trigger, lastResult) {
