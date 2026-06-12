@@ -401,19 +401,16 @@ test("runAutopilot executes a validation repair apply after validation failure",
   assert.equal(second.candidateId, "adaptive-validation-repair");
   assert.equal(second.strategy.syntheticCandidate, true);
   assert.equal(second.strategy.adaptation.trigger, "validation-failed");
-  assert.equal(second.strategy.adaptation.apply.mode, "write-file");
-  assert.equal(second.apply.mode, "write-file");
+  assert.equal(second.strategy.adaptation.proposal.mode, "command");
+  assert.equal(second.strategy.adaptation.proposal.kind, "validation-repair");
+  assert.match(second.strategy.adaptation.proposal.objective, /trailing whitespace/);
+  assert.equal(second.strategy.adaptation.apply.mode, "command");
+  assert.equal(second.apply.mode, "command");
   assert.equal(second.apply.status, "pass");
-  assert.equal(second.apply.targetFile, "proof/repair-002-adaptive-validation-repair.md");
-  const repairDoc = readFileSync(second.apply.targetPath, "utf8");
-  assert.match(repairDoc, /Trigger: validation-failed/);
-  assert.match(repairDoc, /Previous candidate: metric-/);
-  assert.match(repairDoc, /## Proposal/);
-  assert.match(repairDoc, /Mode: write-file/);
-  assert.match(repairDoc, /Objective: Restore the failed validation path/);
-  assert.match(repairDoc, /phase: experiment/);
-  assert.match(repairDoc, /command: git diff --check/);
-  assert.match(repairDoc, /repeatsFailedApply: false/);
+  assert.match(second.apply.command, /'diff', '--check'/);
+  assert.equal(second.decision, "keep");
+  assert.equal(second.evaluation.checks.validationPassed, true);
+  assert.equal(second.evaluation.checks.reviewPassed, true);
 });
 
 test("runAutopilot executes a review blocker repair apply after self-review blocks", () => {

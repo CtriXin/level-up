@@ -140,7 +140,7 @@ function runRound({
     mcp,
     tools
   });
-  const before = getWorktreeStatus(worktreePath);
+  const before = getWorktreeSnapshot(worktreePath);
   const apply = runApplyStep({
     runRoot,
     round,
@@ -150,14 +150,14 @@ function runRound({
   });
   const experimentPhase = runDevLoop(runRoot, { phase: "experiment", execute });
   const finalPhase = runDevLoop(runRoot, { phase: "final", execute });
-  const after = getWorktreeStatus(worktreePath);
+  const after = getWorktreeSnapshot(worktreePath);
   const review = reviewExperiment({
     worktreePath,
     candidate,
     applyCommand: resolvedApply.applyCommand,
     devLoopResults: [experimentPhase, finalPhase]
   });
-  const changed = after.length > 0 && before !== after;
+  const changed = after.hasChanges && before.signature !== after.signature;
   const evaluation = evaluateExperiment(runRoot, {
     round,
     candidate,
@@ -343,6 +343,17 @@ function renderTemplate(value, replacements) {
 
 function getWorktreeStatus(worktreePath) {
   return runGit(worktreePath, ["status", "--porcelain"], { allowFailure: true }).stdout;
+}
+
+function getWorktreeSnapshot(worktreePath) {
+  const status = getWorktreeStatus(worktreePath);
+  const diff = runGit(worktreePath, ["diff", "--no-ext-diff"], { allowFailure: true }).stdout;
+  return {
+    status,
+    diff,
+    hasChanges: Boolean(status),
+    signature: `${status}\n---diff---\n${diff}`
+  };
 }
 
 function commitExperiment(worktreePath, candidate) {
