@@ -49,7 +49,8 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `runner`: current session now; future opencode/MMS/external model process adapters.
 - `apply`: structured worktree mutation via command, patch, or file-write manifests.
 - `notify`: Feishu/GitHub/GitLab notification adapters after PR or MR creation.
-- `redline`: final PR/MR pre-merge gate through sibling `redline-guard`; it records merge-readiness evidence but never approves, merges, deploys, or force-pushes.
+- `redline`: optional PR/MR merge-readiness evidence adapter through sibling `redline-guard`.
+- `redline-final`: final pre-merge gate wrapper; only `mergeable` passes, and it never approves, merges, deploys, or force-pushes.
 - `cleanup`: remove clean merged experiment worktree folders after PR/MR merge.
 
 ## Quick Start
@@ -145,7 +146,7 @@ npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id> \
   --redline
 ```
 
-`redline` is the final pre-merge adapter. It first looks for a configured `--redline-bin` or `LEVEL_UP_REDLINE_BIN`, then a sibling `../redline-guard/src/cli.mjs`, then `redline-guard` on PATH. For final pre-merge use, prefer `redline-final`; only `mergeable` passes `finalGateStatus`. `needs-review`, `blocked`, `unknown`, missing URL, or adapter failure must stop before merge. PR/MR comments are never posted unless `--comment` is explicitly passed.
+`redline` is evidence-only; `redline-final` is the final pre-merge gate. Both first look for a configured `--redline-bin` or `LEVEL_UP_REDLINE_BIN`, then a sibling `../redline-guard/src/cli.mjs`, then `redline-guard` on PATH. By default `level-up` passes `--evidence <run-root>` so the adapter can inspect local run artifacts; pass `--evidence false` only through API options when evidence should be omitted. For final pre-merge use, prefer `redline-final`; only `mergeable` passes `finalGateStatus`. `needs-review`, `blocked`, `unknown`, missing URL, or adapter failure must stop before merge. `--notify` does not request PR/MR comments; comments are never posted unless `--comment` is explicitly passed.
 
 ```bash
 npm run level-up -- notify \

@@ -697,12 +697,20 @@ writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
   const redline = runRedlineAudit(result.runRoot, {
     url: "https://github.com/CtriXin/example/pull/1",
     bin: process.execPath,
-    commandArgs: [fakeCli]
+    commandArgs: [fakeCli],
+    notify: true
   });
   assert.equal(redline.status, "pass");
   assert.equal(redline.decision, "mergeable");
-  assert.equal(redline.finalGateStatus, "pass");
+  assert.equal(redline.finalGateStatus, undefined);
+  assert.equal(redline.finalGate, false);
+  assert.equal(redline.commentRequested, false);
+  assert.equal(redline.safety.commentRequiresExplicitFlag, true);
+  assert.equal(redline.safety.approve, false);
+  assert.equal(redline.safety.merge, false);
   assert.match(redline.command, /--evidence/);
+  assert.ok(redline.command.includes(`--evidence ${result.runRoot}`));
+  assert.match(redline.command, /--notify/);
   assert.doesNotMatch(redline.command, /--comment/);
   assert.ok(existsSync(redline.files.manifest));
 
@@ -712,6 +720,69 @@ writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
   const reportText = readFileSync(report.files.report, "utf8");
   assert.match(reportText, /Redline Guard 预审/);
   assert.match(reportText, /mergeable/);
+});
+
+test("runRedlineAudit reports non-final adapter failures without final gate blocking semantics", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Keep evidence-only redline failure semantics distinct",
+    metric: "Increase redline failure clarity"
+  });
+  const fakeCli = join(mkdtempSync(join(tmpdir(), "redline-fail-")), "fail-redline.mjs");
+  writeFileSync(fakeCli, "process.stderr.write('boom\n'); process.exit(2);\n");
+
+  const redline = runRedlineAudit(result.runRoot, {
+    url: "https://github.com/CtriXin/example/pull/2",
+    bin: process.execPath,
+    commandArgs: [fakeCli]
+  });
+
+  assert.equal(redline.status, "failed");
+  assert.equal(redline.reason, "redline_guard_exit_nonzero");
+  assert.equal(redline.finalGateStatus, "failed");
+});
+
+test("runRedlineFinalGate blocks adapter failures and non-mergeable decisions", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Block final gate when redline cannot prove mergeability",
+    metric: "Increase final gate coverage"
+  });
+  const url = "https://github.com/CtriXin/example/pull/3";
+  const missing = runRedlineFinalGate(result.runRoot, {
+    url,
+    bin: join(tmpdir(), "missing-redline-guard")
+  });
+  assert.equal(missing.status, "failed");
+  assert.equal(missing.reason, "ENOENT");
+  assert.equal(missing.finalGateStatus, "blocked");
+
+  const fakeCli = join(mkdtempSync(join(tmpdir(), "redline-decision-")), "decision-redline.mjs");
+  writeFileSync(fakeCli, `
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const outIndex = process.argv.indexOf("--out");
+const out = outIndex >= 0 ? process.argv[outIndex + 1] : process.cwd();
+mkdirSync(out, { recursive: true });
+writeFileSync(join(out, "audit-result.json"), JSON.stringify({
+  decision: process.env.REDLINE_DECISION || "unknown"
+}, null, 2));
+writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
+`);
+
+  for (const decision of ["needs-review", "blocked", "unknown"]) {
+    const redline = runRedlineFinalGate(result.runRoot, {
+      url,
+      bin: process.execPath,
+      commandArgs: [fakeCli],
+      env: { REDLINE_DECISION: decision }
+    });
+    assert.equal(redline.status, "pass");
+    assert.equal(redline.decision, decision);
+    assert.equal(redline.finalGateStatus, "blocked");
+  }
 });
 
 test("runRedlineFinalGate blocks when PR or MR URL is missing", () => {

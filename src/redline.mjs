@@ -94,7 +94,7 @@ export function runRedlineAudit(runRootInput, options = {}) {
   if (result.status !== 0) {
     manifest.status = "failed";
     manifest.reason = "redline_guard_exit_nonzero";
-    manifest.finalGateStatus = "blocked";
+    manifest.finalGateStatus = finalGate ? "blocked" : "failed";
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }
@@ -102,7 +102,9 @@ export function runRedlineAudit(runRootInput, options = {}) {
   manifest.status = "pass";
   manifest.result = readOptionalJson(manifest.files.resultJson);
   manifest.decision = normalizeDecision(manifest.result);
-  manifest.finalGateStatus = manifest.decision === "mergeable" ? "pass" : "blocked";
+  if (finalGate) {
+    manifest.finalGateStatus = manifest.decision === "mergeable" ? "pass" : "blocked";
+  }
   writeJson(manifest.files.manifest, manifest);
   return manifest;
 }
