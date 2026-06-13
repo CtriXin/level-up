@@ -1,23 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { runAutopilot } from "../src/autopilot.mjs";
+import { evaluateExperiment } from "../src/evaluator.mjs";
+import { parseDuration } from "../src/duration.mjs";
 import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { buildFeishuPostPayload, notifyFeishu } from "../src/notify.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
 import { runRedlineAudit, runRedlineFinalGate } from "../src/redline.mjs";
 import { generateRunReport } from "../src/report.mjs";
-import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
+import { appendLedger, createRun, createWorktree, finalizeStateCoreRun, readJson, scanTarget } from "../src/runtime.mjs";
 import { generateRunnerPacket } from "../src/runner.mjs";
 import { reviewExperiment } from "../src/self-review.mjs";
 import { selectNextCandidate } from "../src/strategy.mjs";
 import { generateWorkPack } from "../src/work-pack.mjs";
 import { cleanupMergedWorktrees } from "../src/worktree-cleanup.mjs";
 import runPostMergeCleanup from "../src/post-merge.mjs";
+import {
+  StateCoreCliError,
+  advance,
+  readTaskState,
+  reportSlot,
+  resolveStateCoreCli,
+  setLedger,
+  setRunner
+} from "../src/state-core.mjs";
 
 function sh(cwd, command, args) {
   const result = spawnSync(command, args, {
@@ -58,6 +69,53 @@ function fixtureRepo() {
   return dir;
 }
 
+function fakeStateCore({ readState, failAdvanceDone = false } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "level-up-state-core-"));
+  mkdirSync(join(dir, "src"), { recursive: true });
+  const logPath = join(dir, "calls.jsonl");
+  const cliPath = join(dir, "src", "cli.py");
+  writeFileSync(
+    cliPath,
+    `#!/usr/bin/env python3
+import json
+import sys
+
+args = sys.argv[1:]
+with open(${JSON.stringify(logPath)}, "a", encoding="utf-8") as handle:
+    handle.write(json.dumps(args, ensure_ascii=False) + "\\n")
+
+command = args[0] if args else ""
+if command == "read":
+    print(json.dumps(${JSON.stringify(readState ?? {
+      schema_version: "0.1.0",
+      task_id: "demo-task",
+      intent: {"raw": "Raw intent", "goal": "Goal from state", "kind": "feature"},
+      size: "medium",
+      risk: "low",
+      phase: "intake",
+      slots: {},
+      human_decisions: [],
+      next_action: "Run level-up"
+    })}, ensure_ascii=False))
+elif command == "advance" and "--phase" in args and args[args.index("--phase") + 1] == "done" and ${failAdvanceDone ? "True" : "False"}:
+    print("error: cannot advance to done; unmet slots: ['recorder']", file=sys.stderr)
+    raise SystemExit(1)
+else:
+    print("/tmp/state-path")
+`
+  );
+  chmodSync(cliPath, 0o755);
+  return { dir, logPath, calls: () => readFileSync(logPath, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) };
+}
+
+function restoreEnv(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
+
 test("createRun writes a goal contract and ready state", () => {
   const repo = fixtureRepo();
   const result = createRun({
@@ -71,6 +129,48 @@ test("createRun writes a goal contract and ready state", () => {
   assert.equal(result.state.status, "ready");
 });
 
+test("state-core adapter reads JSON and reports clear missing CLI errors", () => {
+  const fake = fakeStateCore();
+  const state = readTaskState("demo-task", { stateCoreDir: fake.dir });
+
+  assert.equal(state.intent.goal, "Goal from state");
+  assert.deepEqual(fake.calls()[0], ["read", "--task-id", "demo-task"]);
+  assert.equal(resolveStateCoreCli({ stateCoreDir: fake.dir }).endsWith("src/cli.py"), true);
+  assert.throws(
+    () => readTaskState("missing", { stateCoreDir: join(fake.dir, "missing") }),
+    (error) => error instanceof StateCoreCliError && /state-core CLI not found/.test(error.message)
+  );
+});
+
+test("state-core adapter wraps set, report, and advance CLI commands", () => {
+  const fake = fakeStateCore();
+
+  setRunner("demo-task", { stateCoreDir: fake.dir });
+  setLedger("demo-task", ".level-up/runs/run-1/", { stateCoreDir: fake.dir });
+  reportSlot("demo-task", "verify", "pass", "kept useful experiment", {
+    stateCoreDir: fake.dir,
+    evidenceRefs: [".level-up/runs/run-1/ledger.tsv"],
+    details: { runRoot: ".level-up/runs/run-1" }
+  });
+  advance("demo-task", "verifying", { stateCoreDir: fake.dir });
+
+  const calls = fake.calls();
+  assert.deepEqual(calls[0], ["set", "--task-id", "demo-task", "--runner", "level-up"]);
+  assert.deepEqual(calls[1], ["set", "--task-id", "demo-task", "--ledger-ref", ".level-up/runs/run-1/"]);
+  assert.equal(calls[2][0], "report");
+  assert.ok(calls[2].includes("--details-json"));
+  assert.deepEqual(calls[3], ["advance", "--task-id", "demo-task", "--phase", "verifying"]);
+});
+
+test("state-core adapter propagates done-gate failures", () => {
+  const fake = fakeStateCore({ failAdvanceDone: true });
+
+  assert.throws(
+    () => advance("demo-task", "done", { stateCoreDir: fake.dir }),
+    (error) => error instanceof StateCoreCliError && error.stderr.includes("unmet slots")
+  );
+});
+
 test("createRun normalizes long metric names for readable packets", () => {
   const repo = fixtureRepo();
   const result = createRun({
@@ -79,6 +179,24 @@ test("createRun normalizes long metric names for readable packets", () => {
     metric: "Increase runtime usefulness by adding candidate generation while keeping tests and schemas passing"
   });
   assert.equal(result.goal.primaryMetric.name.endsWith("_"), false);
+});
+
+test("createRun can bind a canonical state-core task without breaking run files", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Goal from state",
+    stateCoreTask: {
+      taskId: "demo-task",
+      size: "medium",
+      intentRaw: "Raw intent"
+    }
+  });
+
+  assert.equal(result.goal.stateCore.taskId, "demo-task");
+  assert.equal(result.goal.stateCore.size, "medium");
+  assert.equal(result.goal.stateCore.slot, "verify");
+  assert.equal(readJson(join(result.runRoot, "goal.json")).stateCore.taskId, "demo-task");
 });
 
 test("scanTarget detects package scripts and frameworks", () => {
@@ -199,6 +317,87 @@ test("appendLedger records rounds and stops at max rounds", () => {
   });
   assert.equal(recorded.round, 1);
   assert.equal(recorded.state.status, "stopped");
+});
+
+test("appendLedger does not require state-core when no canonical task is bound", () => {
+  const repo = fixtureRepo();
+  const fake = fakeStateCore();
+  const original = process.env.STATE_CORE_DIR;
+  process.env.STATE_CORE_DIR = join(fake.dir, "missing");
+  try {
+    const result = createRun({ target: repo, goal: "Legacy standalone run" });
+    const recorded = appendLedger(result.runRoot, {
+      status: "keep",
+      score: 1,
+      description: "legacy keep"
+    });
+    assert.equal(recorded.status, "keep");
+  } finally {
+    restoreEnv("STATE_CORE_DIR", original);
+  }
+});
+
+test("appendLedger maps keep/discard to state-core slot reports", () => {
+  const repo = fixtureRepo();
+  const fake = fakeStateCore();
+  const original = process.env.STATE_CORE_DIR;
+  process.env.STATE_CORE_DIR = fake.dir;
+  try {
+    const keepRun = createRun({
+      target: repo,
+      goal: "Keep useful runtime result",
+      stateCoreTask: { taskId: "medium-task", size: "medium" }
+    });
+    appendLedger(keepRun.runRoot, {
+      status: "keep",
+      score: 1,
+      description: "medium verification passed"
+    });
+    const keepReport = fake.calls().find((call) => call[0] === "report");
+    assert.ok(keepReport);
+    assert.ok(keepReport.includes("--slot"));
+    assert.equal(keepReport[keepReport.indexOf("--slot") + 1], "verify");
+    assert.equal(keepReport[keepReport.indexOf("--verdict") + 1], "pass");
+
+    const largeRun = createRun({
+      target: repo,
+      goal: "Discard failed runtime result",
+      stateCoreTask: { taskId: "large-task", size: "large" }
+    });
+    appendLedger(largeRun.runRoot, {
+      status: "discard",
+      score: 0,
+      description: "large executor failed"
+    });
+    const reports = fake.calls().filter((call) => call[0] === "report");
+    const discardReport = reports.at(-1);
+    assert.equal(discardReport[discardReport.indexOf("--slot") + 1], "executor");
+    assert.equal(discardReport[discardReport.indexOf("--verdict") + 1], "fail");
+  } finally {
+    restoreEnv("STATE_CORE_DIR", original);
+  }
+});
+
+test("finalizeStateCoreRun writes ledger_ref and advances phase", () => {
+  const repo = fixtureRepo();
+  const fake = fakeStateCore();
+  const original = process.env.STATE_CORE_DIR;
+  process.env.STATE_CORE_DIR = fake.dir;
+  try {
+    const result = createRun({
+      target: repo,
+      goal: "Finalize runtime state",
+      stateCoreTask: { taskId: "finalize-task", size: "medium" }
+    });
+    const finalized = finalizeStateCoreRun(result.runRoot);
+    assert.equal(finalized.taskId, "finalize-task");
+    assert.equal(finalized.phase, "verifying");
+    const calls = fake.calls();
+    assert.ok(calls.some((call) => call[0] === "set" && call.includes("--ledger-ref")));
+    assert.ok(calls.some((call) => call[0] === "advance" && call.includes("verifying")));
+  } finally {
+    restoreEnv("STATE_CORE_DIR", original);
+  }
 });
 
 test("generateIdeas writes structured experiment candidates", () => {
@@ -720,6 +919,216 @@ writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
   const reportText = readFileSync(report.files.report, "utf8");
   assert.match(reportText, /Redline Guard 预审/);
   assert.match(reportText, /mergeable/);
+});
+
+test("runAutopilot stops after the no-improvement threshold instead of one discard", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Keep trying after a failed experiment until improvement stalls",
+    metric: "Increase experiment density"
+  });
+  writeFileSync(join(result.runRoot, "metric-baseline.json"), JSON.stringify({ value: 100 }));
+  const metricPath = join(result.runRoot, "experiments", "round-{roundPadded}", "metric.json");
+  const applyScript = [
+    "const fs=require('fs');",
+    `fs.writeFileSync(${JSON.stringify(metricPath)}, JSON.stringify({ value: 100 }));`,
+    "fs.mkdirSync('proof',{recursive:true});",
+    "fs.writeFileSync('proof/no-gain-{roundPadded}.txt','no metric gain\\n');"
+  ].join("");
+  const summary = runAutopilot(result.runRoot, {
+    rounds: 5,
+    maxNoImprovement: 2,
+    runner: "current-session",
+    runnerProfile: "codex-session",
+    applyCommand: `node -e ${JSON.stringify(applyScript)}`
+  });
+
+  assert.equal(summary.status, "stopped");
+  assert.equal(summary.stopReason, "no-improvement");
+  assert.equal(summary.rounds.length, 2);
+  assert.equal(summary.noImprovementRounds, 2);
+  assert.ok(summary.rounds.every((round) => round.decision === "discard"));
+});
+
+test("runAutopilot honors a wall-clock budget and records timing", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Bound autopilot by wall-clock budget like overnight runs",
+    metric: "Increase budgeted autonomy"
+  });
+  const summary = runAutopilot(result.runRoot, {
+    rounds: 5,
+    budgetMs: 0,
+    runner: "current-session"
+  });
+
+  assert.equal(summary.stopReason, "budget-exhausted");
+  assert.equal(summary.budgetMs, 0);
+  assert.equal(summary.rounds.length, 0);
+  assert.equal(summary.status, "stopped");
+  assert.equal(typeof summary.elapsedMs, "number");
+});
+
+test("runAutopilot records a soft round-timeout stop after an over-budget round", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Stop after a round exceeds its per-round time budget",
+    metric: "Increase timeout explainability",
+    maxMinutesPerRound: 1
+  });
+  const originalNow = Date.now;
+  let calls = 0;
+  Date.now = () => (calls++ < 2 ? 0 : 60000);
+  let summary;
+  try {
+    summary = runAutopilot(result.runRoot, {
+      rounds: 3,
+      execute: true,
+      runner: "current-session",
+      applyWriteFile: "proof/round-timeout.txt",
+      applyContent: "round timeout proof\n"
+    });
+  } finally {
+    Date.now = originalNow;
+  }
+
+  assert.equal(summary.stopReason, "round-timeout");
+  assert.equal(summary.rounds.length, 1);
+  assert.equal(summary.rounds[0].decision, "keep");
+});
+
+test("autopilot result schema declares emitted summary and round fields", () => {
+  const schema = readJson(join(process.cwd(), "schemas", "autopilot-result.schema.json"));
+  for (const key of ["stateCore", "report"]) {
+    assert.ok(schema.properties[key], `missing top-level schema property ${key}`);
+  }
+  const roundProperties = schema.properties.rounds.items.properties;
+  for (const key of ["blocked", "strategy", "evaluation"]) {
+    assert.ok(roundProperties[key], `missing round schema property ${key}`);
+  }
+});
+
+test("evaluateExperiment keeps only metric-improving experiments when a metric exists", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Make the metric slot decide keep/discard",
+    metric: "Decrease primary latency"
+  });
+  assert.equal(readJson(join(result.runRoot, "goal.json")).primaryMetric.direction, "decrease");
+  writeFileSync(join(result.runRoot, "metric-baseline.json"), JSON.stringify({ value: 100 }));
+
+  const passingGates = {
+    changed: true,
+    apply: { status: "pass" },
+    validation: [{ status: "pass" }],
+    review: { status: "ok" }
+  };
+
+  const improvedDir = join(result.runRoot, "experiments", "round-001");
+  mkdirSync(improvedDir, { recursive: true });
+  writeFileSync(join(improvedDir, "metric.json"), JSON.stringify({ value: 80 }));
+  const improved = evaluateExperiment(result.runRoot, { round: 1, candidate: { id: "improve" }, ...passingGates });
+  assert.equal(improved.decision, "keep");
+  assert.equal(improved.metric.available, true);
+  assert.equal(improved.metric.improved, true);
+  assert.equal(improved.score, 20);
+
+  const regressedDir = join(result.runRoot, "experiments", "round-002");
+  mkdirSync(regressedDir, { recursive: true });
+  writeFileSync(join(regressedDir, "metric.json"), JSON.stringify({ value: 120 }));
+  const regressed = evaluateExperiment(result.runRoot, { round: 2, candidate: { id: "regress" }, ...passingGates });
+  assert.equal(regressed.decision, "discard");
+  assert.equal(regressed.metric.improved, false);
+  assert.equal(regressed.score, -20);
+  assert.match(regressed.reasons.join("\n"), /primary metric did not improve/);
+});
+
+test("runAutopilot never advances a bound state-core task to done", () => {
+  const repo = fixtureRepo();
+  const fake = fakeStateCore();
+  const original = process.env.STATE_CORE_DIR;
+  process.env.STATE_CORE_DIR = fake.dir;
+  try {
+    const result = createRun({
+      target: repo,
+      goal: "Freeze the state-core boundary so level-up never owns the done-gate",
+      stateCoreTask: { taskId: "boundary-task", size: "medium" }
+    });
+    runAutopilot(result.runRoot, {
+      execute: true,
+      runner: "current-session",
+      applyWriteFile: "src/level-up-boundary.txt",
+      applyContent: "boundary proof\n"
+    });
+    const advances = fake.calls().filter((call) => call[0] === "advance");
+    assert.ok(advances.length > 0, "expected at least one advance call");
+    assert.ok(advances.every((call) => call[call.indexOf("--phase") + 1] !== "done"));
+    assert.ok(advances.some((call) => call.includes("verifying")));
+  } finally {
+    restoreEnv("STATE_CORE_DIR", original);
+  }
+});
+
+test("parseDuration fails hard on an invalid budget instead of disabling it", () => {
+  assert.equal(parseDuration(undefined), null);
+  assert.equal(parseDuration(null), null);
+  assert.equal(parseDuration("5m"), 300000);
+  assert.equal(parseDuration("30s"), 30000);
+  assert.equal(parseDuration("90000"), 90000);
+  assert.throws(() => parseDuration("5min"), /invalid --budget/);
+  assert.throws(() => parseDuration(true), /requires a value/);
+});
+
+test("evaluateExperiment discards a round that beats baseline but loses to the incumbent best", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Compare each round against the best kept value, not a fixed baseline",
+    metric: "Decrease primary latency"
+  });
+  writeFileSync(join(result.runRoot, "metric-baseline.json"), JSON.stringify({ value: 100 }));
+  writeFileSync(join(result.runRoot, "metric-incumbent.json"), JSON.stringify({ value: 80 }));
+
+  const passingGates = {
+    changed: true,
+    apply: { status: "pass" },
+    validation: [{ status: "pass" }],
+    review: { status: "ok" }
+  };
+
+  // 90 beats the original baseline (100) but is worse than the incumbent (80).
+  const dir = join(result.runRoot, "experiments", "round-001");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "metric.json"), JSON.stringify({ value: 90 }));
+  const evaluation = evaluateExperiment(result.runRoot, { round: 1, candidate: { id: "regress" }, ...passingGates });
+
+  assert.equal(evaluation.decision, "discard");
+  assert.equal(evaluation.metric.reference, 80);
+  assert.equal(evaluation.metric.baseline, 100);
+  assert.equal(evaluation.metric.improved, false);
+  assert.match(evaluation.reasons.join("\n"), /best-so-far/);
+});
+
+test("runAutopilot defaults the wall-clock budget from the goal contract", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Carry the wall-clock budget in the contract, not only on the CLI",
+    metric: "Increase contract-driven autonomy",
+    maxWallClockMs: 600000
+  });
+  assert.equal(readJson(join(result.runRoot, "goal.json")).stopConditions.maxWallClockMs, 600000);
+
+  const summary = runAutopilot(result.runRoot, { runner: "current-session" });
+  // A contract budget is read without any CLI flag, and it opts the run into
+  // multi-round mode (defaultRounds comes from the contract, not 1).
+  assert.equal(summary.budgetMs, 600000);
+  assert.ok(summary.rounds.length > 1);
+  assert.equal(summary.stopReason, "no-improvement");
 });
 
 test("runRedlineAudit reports non-final adapter failures without final gate blocking semantics", () => {

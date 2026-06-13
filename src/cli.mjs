@@ -19,6 +19,8 @@ import { generateRunReport } from "./report.mjs";
 import { runRedlineAudit, runRedlineFinalGate } from "./redline.mjs";
 import { cleanupMergedWorktrees } from "./worktree-cleanup.mjs";
 import runPostMergeCleanup from "./post-merge.mjs";
+import { readTaskState, setRunner, taskStateToRunGoal } from "./state-core.mjs";
+import { parseDuration } from "./duration.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -52,13 +54,13 @@ function help() {
   return `level-up ${VERSION}
 
 Usage:
-  level-up init --target <repo> --goal <goal> [--metric <metric>]
+  level-up init --target <repo> (--goal <goal>|--task-id <state-core-task>) [--metric <metric>]
   level-up scan --run <run-root>
   level-up ideas --run <run-root>
   level-up work-pack --run <run-root>
   level-up runner-pack --run <run-root> [--runner current-session|opencode-profile|mms-runner|external-command] [--runner-profile <name>]
   level-up dev-loop --run <run-root> --phase baseline|experiment|final [--execute]
-  level-up run --run <run-root> [--execute] [--pr-pack] [--runner <type>] [--runner-profile <name>] [--candidate <id>] [--apply-command <cmd>|--apply-patch <file>|--apply-write-file <path> --apply-content <text>] [--commit-kept] [--rounds <n>]
+  level-up run --run <run-root> [--execute] [--pr-pack] [--rounds <n>] [--budget <5m|30s|ms>] [--max-no-improvement <n>] [--runner <type>] [--runner-profile <name>] [--candidate <id>] [--apply-command <cmd>|--apply-patch <file>|--apply-write-file <path> --apply-content <text>] [--commit-kept]
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
@@ -91,20 +93,35 @@ async function main() {
   }
 
   if (command === "init") {
+    const stateCore = args["task-id"] ? readTaskState(args["task-id"], stateCoreOptions(args)) : null;
+    const goal = args.goal === true ? null : args.goal;
     const result = createRun({
       target: args.target ?? ".",
       workspace: args.workspace,
-      goal: requireValue(args, "goal"),
+      goal: goal || (stateCore ? taskStateToRunGoal(stateCore) : requireValue(args, "goal")),
       metric: args.metric,
       maxRounds: args["max-rounds"],
       maxMinutesPerRound: args["max-minutes-per-round"],
       maxNoImprovementRounds: args["max-no-improvement-rounds"],
-      allowDirty: Boolean(args["allow-dirty"])
+      allowDirty: Boolean(args["allow-dirty"]),
+      stateCoreTask: stateCore
+        ? {
+            taskId: stateCore.task_id,
+            size: stateCore.size,
+            intentRaw: stateCore.intent?.raw,
+            root: args["state-root"] === true ? null : args["state-root"],
+            stateCoreDir: args["state-core-dir"] === true ? null : args["state-core-dir"]
+          }
+        : null
     });
+    if (stateCore) {
+      setRunner(stateCore.task_id, stateCoreOptions(args));
+    }
     print({
       runRoot: result.runRoot,
       status: result.state.status,
-      nextAction: result.state.nextAction
+      nextAction: result.state.nextAction,
+      stateCore: result.goal.stateCore ?? null
     });
     return;
   }
@@ -170,7 +187,9 @@ async function main() {
         mcp: args.mcp,
         tools: args.tools,
         commitKept: Boolean(args["commit-kept"]),
-        rounds: args.rounds
+        rounds: args.rounds === true ? undefined : args.rounds,
+        budgetMs: parseDuration(args.budget),
+        maxNoImprovement: args["max-no-improvement"] === true ? undefined : args["max-no-improvement"]
     });
     if (args.report) {
       summary.report = generateRunReport(runRoot, reportOptions(args));
@@ -316,6 +335,13 @@ function redlineOptions(args) {
     webhookUrl: args["webhook-url"] === true ? null : args["webhook-url"],
     bin: args["redline-bin"] === true ? null : args["redline-bin"],
     timeoutMs: args["redline-timeout-ms"] === true ? null : args["redline-timeout-ms"]
+  };
+}
+
+function stateCoreOptions(args) {
+  return {
+    stateCoreDir: args["state-core-dir"] === true ? null : args["state-core-dir"],
+    root: args["state-root"] === true ? null : args["state-root"]
   };
 }
 

@@ -10,7 +10,13 @@
 - run experiment/final validation phases;
 - run deterministic self-review guardrails;
 - record keep/discard in the ledger;
+- stop on a budget, round, or no-improvement condition;
 - optionally generate a PR packet.
+
+The run summary records `stopReason`, `budgetMs`, `elapsedMs`, and
+`noImprovementRounds` so the report and ledger explain why the loop ended. See
+[experiment-loop.md](experiment-loop.md) for stop-condition and metric-slot
+semantics.
 
 ## Why This Is L3
 

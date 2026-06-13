@@ -79,6 +79,17 @@ npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> --execute
 
 `level-up run` ensures scan, ideas, work-pack, baseline validation, an isolated worktree, experiment/final validation, deterministic self-review, ledger recording, and optional PR evidence. If the round makes no change or fails validation/review, it records `discard` instead of pretending the attempt worked. Adaptive rounds can turn validation/review failures into focused repair candidates; synthetic repair candidates use their own targeted repair proposal and safe apply plan instead of repeating the failed input. A narrow validation repair can execute a safe command for `git diff --check` whitespace failures.
 
+Run multiple experiments under a budget instead of a single round:
+
+```bash
+# Keep experimenting until a 5-minute wall-clock budget runs out,
+# or 3 consecutive rounds fail to improve (whichever comes first).
+npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> \
+  --execute --budget 5m --max-no-improvement 3 --pr-pack
+```
+
+Stop conditions default from the goal contract's `stopConditions` (`maxRounds`, `maxWallClockMs`, `maxMinutesPerRound`, `maxNoImprovementRounds`) and are overridden per run by `--rounds`, `--budget`, and `--max-no-improvement`. The summary records `stopReason` (`rounds-exhausted`, `budget-exhausted`, `no-improvement`, `round-timeout`, `blocked`), `budgetMs`, `elapsedMs`, and `noImprovementRounds`. To let a numeric metric decide keep/discard, write `metric-baseline.json` at the run root and `metric.json` in each `experiments/round-NNN/`; each round is scored against the best kept value so far (the incumbent), and the runtime advances `metric-incumbent.json` after every keep. Absent those files, the binary gates decide. See [docs/experiment-loop.md](docs/experiment-loop.md).
+
 Generate the same loop with a user-readable Chinese report:
 
 ```bash
@@ -177,6 +188,27 @@ npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id>
 ```
 
 The CLI is only the fallback renderer. The durable contract is the files under `.level-up/runs/<run-id>/`.
+
+## state-core Binding
+
+`level-up` can bind a run to a canonical state-core task when Mommy hands off a `task_id`.
+
+```bash
+STATE_CORE_DIR=/Users/xin/auto-skills/CtriXin-repo/state-core \
+npm run level-up -- init --target /path/to/project --task-id <task-id>
+```
+
+The adapter resolves state-core from `STATE_CORE_DIR`, falling back to a sibling `../state-core`, and calls `python3 <state-core>/src/cli.py`. Node never imports Python code directly.
+
+Binding behavior:
+
+- init reads `task-state.json` through `cli.py read`, uses `intent.goal` / `intent.raw` as the level-up goal, and sets `runner=level-up`;
+- keep records report `pass` to the related slot (`verify` for medium/small, `executor` for large);
+- discard/crash records report `fail`, producing a state-core blocker;
+- finalize writes `ledger_ref` to the `.level-up/runs/<run-id>/` root and advances the canonical phase to `verifying`;
+- `done` remains state-core's decision through `cli.py advance --phase done`; if the gate blocks, level-up reports the unmet slots instead of declaring completion.
+
+Canonical truth lives in state-core. `.level-up/runs/*` is runtime state and evidence for the loop, not a replacement for `task-state.json`.
 
 ## Interview vs Grill
 

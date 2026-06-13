@@ -64,7 +64,8 @@
       "properties": {
         "maxRounds": { "type": "integer", "minimum": 1 },
         "maxMinutesPerRound": { "type": "integer", "minimum": 1 },
-        "maxNoImprovementRounds": { "type": "integer", "minimum": 1 }
+        "maxNoImprovementRounds": { "type": "integer", "minimum": 1 },
+        "maxWallClockMs": { "type": ["integer", "null"], "minimum": 1 }
       }
     },
     "humanGates": {

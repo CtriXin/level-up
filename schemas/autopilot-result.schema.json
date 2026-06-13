@@ -4,42 +4,140 @@
   "title": "LevelUpAutopilotResult",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "runId", "status", "rounds"],
+  "required": [
+    "version",
+    "runId",
+    "status",
+    "stopReason",
+    "rounds"
+  ],
   "properties": {
-    "version": { "type": "string" },
-    "runId": { "type": "string" },
-    "status": { "type": "string", "enum": ["pass", "stopped"] },
+    "version": {
+      "type": "string"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "adapted",
+        "stopped"
+      ]
+    },
+    "stopReason": {
+      "type": "string",
+      "enum": [
+        "rounds-exhausted",
+        "budget-exhausted",
+        "no-improvement",
+        "round-timeout",
+        "blocked"
+      ]
+    },
+    "budgetMs": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "elapsedMs": {
+      "type": "integer"
+    },
+    "noImprovementRounds": {
+      "type": "integer"
+    },
     "rounds": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["round", "candidateId", "decision", "score", "commit", "changed", "runner", "apply", "validation", "review"],
+        "required": [
+          "round",
+          "candidateId",
+          "decision",
+          "score",
+          "commit",
+          "changed",
+          "blocked",
+          "runner",
+          "apply",
+          "validation",
+          "review",
+          "strategy",
+          "evaluation"
+        ],
         "properties": {
-          "round": { "type": "integer" },
-          "candidateId": { "type": "string" },
-          "decision": { "type": "string", "enum": ["keep", "discard"] },
-          "score": { "type": "number" },
-          "commit": { "type": "string" },
-          "changed": { "type": "boolean" },
+          "round": {
+            "type": "integer"
+          },
+          "candidateId": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "discard"
+            ]
+          },
+          "score": {
+            "type": "number"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "boolean"
+          },
+          "blocked": {
+            "type": "boolean"
+          },
           "runner": {
             "type": "object"
           },
           "apply": {
-            "type": ["object", "null"]
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "validation": {
             "type": "array",
-            "items": { "type": "object" }
+            "items": {
+              "type": "object"
+            }
           },
           "review": {
+            "type": "object"
+          },
+          "strategy": {
+            "type": "object"
+          },
+          "evaluation": {
             "type": "object"
           }
         }
       }
     },
     "prPack": {
-      "type": ["object", "null"]
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "stateCore": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "report": {
+      "type": [
+        "object",
+        "null"
+      ]
     }
   }
 }
