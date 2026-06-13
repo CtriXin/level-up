@@ -66,7 +66,7 @@ function scoreFor(decision, metric) {
 
 function keepReason(metric) {
   if (metric.available) {
-    return `primary metric improved (${metric.baseline} -> ${metric.value}, want ${metric.direction}) and apply, validation, and review gates passed`;
+    return `primary metric improved on best-so-far (${metric.reference} -> ${metric.value}, want ${metric.direction}) and apply, validation, and review gates passed`;
   }
   return "changed worktree passed apply, validation, and review gates";
 }
@@ -86,7 +86,7 @@ function discardReasons(checks, apply, review, metric) {
     reasons.push(`review blocked the experiment: ${(review.blockers ?? []).join("; ") || "no blocker detail"}`);
   }
   if (metric.available && metric.improved === false) {
-    reasons.push(`primary metric did not improve (${metric.baseline} -> ${metric.value}, want ${metric.direction})`);
+    reasons.push(`primary metric did not improve on best-so-far (${metric.reference} -> ${metric.value}, want ${metric.direction})`);
   }
   return reasons;
 }

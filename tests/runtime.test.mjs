@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { runAutopilot } from "../src/autopilot.mjs";
 import { evaluateExperiment } from "../src/evaluator.mjs";
+import { parseDuration } from "../src/duration.mjs";
 import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { buildFeishuPostPayload, notifyFeishu } from "../src/notify.mjs";
@@ -916,11 +917,20 @@ test("runAutopilot stops after the no-improvement threshold instead of one disca
     goal: "Keep trying after a failed experiment until improvement stalls",
     metric: "Increase experiment density"
   });
+  writeFileSync(join(result.runRoot, "metric-baseline.json"), JSON.stringify({ value: 100 }));
+  const metricPath = join(result.runRoot, "experiments", "round-{roundPadded}", "metric.json");
+  const applyScript = [
+    "const fs=require('fs');",
+    `fs.writeFileSync(${JSON.stringify(metricPath)}, JSON.stringify({ value: 100 }));`,
+    "fs.mkdirSync('proof',{recursive:true});",
+    "fs.writeFileSync('proof/no-gain-{roundPadded}.txt','no metric gain\\n');"
+  ].join("");
   const summary = runAutopilot(result.runRoot, {
     rounds: 5,
     maxNoImprovement: 2,
     runner: "current-session",
-    runnerProfile: "codex-session"
+    runnerProfile: "codex-session",
+    applyCommand: `node -e ${JSON.stringify(applyScript)}`
   });
 
   assert.equal(summary.status, "stopped");
@@ -1010,4 +1020,62 @@ test("runAutopilot never advances a bound state-core task to done", () => {
   } finally {
     restoreEnv("STATE_CORE_DIR", original);
   }
+});
+
+test("parseDuration fails hard on an invalid budget instead of disabling it", () => {
+  assert.equal(parseDuration(undefined), null);
+  assert.equal(parseDuration(null), null);
+  assert.equal(parseDuration("5m"), 300000);
+  assert.equal(parseDuration("30s"), 30000);
+  assert.equal(parseDuration("90000"), 90000);
+  assert.throws(() => parseDuration("5min"), /invalid --budget/);
+  assert.throws(() => parseDuration(true), /requires a value/);
+});
+
+test("evaluateExperiment discards a round that beats baseline but loses to the incumbent best", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Compare each round against the best kept value, not a fixed baseline",
+    metric: "Decrease primary latency"
+  });
+  writeFileSync(join(result.runRoot, "metric-baseline.json"), JSON.stringify({ value: 100 }));
+  writeFileSync(join(result.runRoot, "metric-incumbent.json"), JSON.stringify({ value: 80 }));
+
+  const passingGates = {
+    changed: true,
+    apply: { status: "pass" },
+    validation: [{ status: "pass" }],
+    review: { status: "ok" }
+  };
+
+  // 90 beats the original baseline (100) but is worse than the incumbent (80).
+  const dir = join(result.runRoot, "experiments", "round-001");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "metric.json"), JSON.stringify({ value: 90 }));
+  const evaluation = evaluateExperiment(result.runRoot, { round: 1, candidate: { id: "regress" }, ...passingGates });
+
+  assert.equal(evaluation.decision, "discard");
+  assert.equal(evaluation.metric.reference, 80);
+  assert.equal(evaluation.metric.baseline, 100);
+  assert.equal(evaluation.metric.improved, false);
+  assert.match(evaluation.reasons.join("\n"), /best-so-far/);
+});
+
+test("runAutopilot defaults the wall-clock budget from the goal contract", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Carry the wall-clock budget in the contract, not only on the CLI",
+    metric: "Increase contract-driven autonomy",
+    maxWallClockMs: 600000
+  });
+  assert.equal(readJson(join(result.runRoot, "goal.json")).stopConditions.maxWallClockMs, 600000);
+
+  const summary = runAutopilot(result.runRoot, { runner: "current-session" });
+  // A contract budget is read without any CLI flag, and it opts the run into
+  // multi-round mode (defaultRounds comes from the contract, not 1).
+  assert.equal(summary.budgetMs, 600000);
+  assert.ok(summary.rounds.length > 1);
+  assert.equal(summary.stopReason, "no-improvement");
 });

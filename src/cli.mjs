@@ -20,6 +20,7 @@ import { runRedlineAudit } from "./redline.mjs";
 import { cleanupMergedWorktrees } from "./worktree-cleanup.mjs";
 import runPostMergeCleanup from "./post-merge.mjs";
 import { readTaskState, setRunner, taskStateToRunGoal } from "./state-core.mjs";
+import { parseDuration } from "./duration.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -39,20 +40,6 @@ function parseArgv(argv) {
     }
   }
   return args;
-}
-
-// Accepts a wall-clock budget like "5m", "30s", "90000" (bare = ms). Returns
-// milliseconds, or null when the flag is absent or unparseable.
-function parseDuration(value) {
-  if (value == null || value === true) {
-    return null;
-  }
-  const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)?$/.exec(String(value).trim());
-  if (!match) {
-    return null;
-  }
-  const scale = { ms: 1, s: 1000, m: 60000, h: 3600000 }[match[2] || "ms"];
-  return Math.round(Number(match[1]) * scale);
 }
 
 function print(value) {

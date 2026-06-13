@@ -11,7 +11,7 @@
     "status": { "type": "string", "enum": ["pass", "adapted", "stopped"] },
     "stopReason": {
       "type": "string",
-      "enum": ["rounds-exhausted", "budget-exhausted", "no-improvement", "blocked"]
+      "enum": ["rounds-exhausted", "budget-exhausted", "no-improvement", "round-timeout", "blocked"]
     },
     "budgetMs": { "type": ["integer", "null"] },
     "elapsedMs": { "type": "integer" },

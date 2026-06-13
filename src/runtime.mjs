@@ -183,7 +183,8 @@ export function createRun(options) {
     stopConditions: {
       maxRounds: Number(options.maxRounds ?? 8),
       maxMinutesPerRound: Number(options.maxMinutesPerRound ?? 20),
-      maxNoImprovementRounds: Number(options.maxNoImprovementRounds ?? 3)
+      maxNoImprovementRounds: Number(options.maxNoImprovementRounds ?? 3),
+      maxWallClockMs: options.maxWallClockMs != null ? Number(options.maxWallClockMs) : null
     },
     humanGates: ["merge", "deploy", "production data mutation", "cross-repository write"]
   };

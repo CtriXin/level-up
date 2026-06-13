@@ -37,10 +37,17 @@ export function runAutopilot(runRootInput, options = {}) {
       stopReason = "budget-exhausted";
       break;
     }
+    const roundStart = Date.now();
     const experiment = runNextRound(runRoot, worktree, options, results);
     results.push(experiment);
     if (experiment.blocked) {
       stopReason = "blocked";
+      break;
+    }
+    // maxMinutesPerRound is enforced post-hoc (soft): a round that overran its
+    // budget completes, then the loop stops before launching another.
+    if (stop.maxRoundMs != null && Date.now() - roundStart > stop.maxRoundMs) {
+      stopReason = "round-timeout";
       break;
     }
     if (experiment.decision === "keep") {
@@ -78,11 +85,14 @@ export function runAutopilot(runRootInput, options = {}) {
 // --rounds or a wall-clock --budget; the budget then bounds maxRounds.
 function resolveStopConfig(goal, options) {
   const limits = goal.stopConditions ?? {};
-  const budgetMs = options.budgetMs != null ? Number(options.budgetMs) : null;
+  // CLI --budget overrides the contract's maxWallClockMs; the contract is the
+  // default, so the documented "default from goal.stopConditions" holds.
+  const budgetMs = options.budgetMs ?? (limits.maxWallClockMs != null ? Number(limits.maxWallClockMs) : null);
   const defaultRounds = budgetMs != null ? Number(limits.maxRounds ?? 8) : 1;
   const maxRounds = Number(options.rounds ?? defaultRounds);
   const maxNoImprovement = Number(options.maxNoImprovement ?? limits.maxNoImprovementRounds ?? Infinity);
-  return { maxRounds, maxNoImprovement, budgetMs };
+  const maxRoundMs = limits.maxMinutesPerRound != null ? Number(limits.maxMinutesPerRound) * 60000 : null;
+  return { maxRounds, maxNoImprovement, budgetMs, maxRoundMs };
 }
 
 function runNextRound(runRoot, worktree, options, results) {
@@ -229,6 +239,11 @@ function runRound({
     review
   };
   writeJson(join(experimentDir, "result.json"), result);
+  if (evaluation.decision === "keep" && evaluation.metric?.available) {
+    // Advance the incumbent so later rounds compete against the best kept value,
+    // not the original baseline.
+    writeJson(join(runRoot, "metric-incumbent.json"), { value: evaluation.metric.value });
+  }
   appendLedger(runRoot, {
     round,
     status: evaluation.decision,
