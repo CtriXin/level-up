@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { runAutopilot } from "../src/autopilot.mjs";
+import { evaluateExperiment } from "../src/evaluator.mjs";
 import { runDevLoop } from "../src/dev-loop.mjs";
 import { generateIdeas } from "../src/ideation.mjs";
 import { buildFeishuPostPayload, notifyFeishu } from "../src/notify.mjs";
@@ -906,4 +907,107 @@ writeFileSync(join(out, "audit-result.md"), "# fake redline\\n");
   const reportText = readFileSync(report.files.report, "utf8");
   assert.match(reportText, /Redline Guard 预审/);
   assert.match(reportText, /mergeable/);
+});
+
+test("runAutopilot stops after the no-improvement threshold instead of one discard", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Keep trying after a failed experiment until improvement stalls",
+    metric: "Increase experiment density"
+  });
+  const summary = runAutopilot(result.runRoot, {
+    rounds: 5,
+    maxNoImprovement: 2,
+    runner: "current-session",
+    runnerProfile: "codex-session"
+  });
+
+  assert.equal(summary.status, "stopped");
+  assert.equal(summary.stopReason, "no-improvement");
+  assert.equal(summary.rounds.length, 2);
+  assert.equal(summary.noImprovementRounds, 2);
+  assert.ok(summary.rounds.every((round) => round.decision === "discard"));
+});
+
+test("runAutopilot honors a wall-clock budget and records timing", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Bound autopilot by wall-clock budget like overnight runs",
+    metric: "Increase budgeted autonomy"
+  });
+  const summary = runAutopilot(result.runRoot, {
+    rounds: 5,
+    budgetMs: 0,
+    runner: "current-session"
+  });
+
+  assert.equal(summary.stopReason, "budget-exhausted");
+  assert.equal(summary.budgetMs, 0);
+  assert.equal(summary.rounds.length, 0);
+  assert.equal(summary.status, "stopped");
+  assert.equal(typeof summary.elapsedMs, "number");
+});
+
+test("evaluateExperiment keeps only metric-improving experiments when a metric exists", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Make the metric slot decide keep/discard",
+    metric: "Decrease primary latency"
+  });
+  assert.equal(readJson(join(result.runRoot, "goal.json")).primaryMetric.direction, "decrease");
+  writeFileSync(join(result.runRoot, "metric-baseline.json"), JSON.stringify({ value: 100 }));
+
+  const passingGates = {
+    changed: true,
+    apply: { status: "pass" },
+    validation: [{ status: "pass" }],
+    review: { status: "ok" }
+  };
+
+  const improvedDir = join(result.runRoot, "experiments", "round-001");
+  mkdirSync(improvedDir, { recursive: true });
+  writeFileSync(join(improvedDir, "metric.json"), JSON.stringify({ value: 80 }));
+  const improved = evaluateExperiment(result.runRoot, { round: 1, candidate: { id: "improve" }, ...passingGates });
+  assert.equal(improved.decision, "keep");
+  assert.equal(improved.metric.available, true);
+  assert.equal(improved.metric.improved, true);
+  assert.equal(improved.score, 20);
+
+  const regressedDir = join(result.runRoot, "experiments", "round-002");
+  mkdirSync(regressedDir, { recursive: true });
+  writeFileSync(join(regressedDir, "metric.json"), JSON.stringify({ value: 120 }));
+  const regressed = evaluateExperiment(result.runRoot, { round: 2, candidate: { id: "regress" }, ...passingGates });
+  assert.equal(regressed.decision, "discard");
+  assert.equal(regressed.metric.improved, false);
+  assert.equal(regressed.score, -20);
+  assert.match(regressed.reasons.join("\n"), /primary metric did not improve/);
+});
+
+test("runAutopilot never advances a bound state-core task to done", () => {
+  const repo = fixtureRepo();
+  const fake = fakeStateCore();
+  const original = process.env.STATE_CORE_DIR;
+  process.env.STATE_CORE_DIR = fake.dir;
+  try {
+    const result = createRun({
+      target: repo,
+      goal: "Freeze the state-core boundary so level-up never owns the done-gate",
+      stateCoreTask: { taskId: "boundary-task", size: "medium" }
+    });
+    runAutopilot(result.runRoot, {
+      execute: true,
+      runner: "current-session",
+      applyWriteFile: "src/level-up-boundary.txt",
+      applyContent: "boundary proof\n"
+    });
+    const advances = fake.calls().filter((call) => call[0] === "advance");
+    assert.ok(advances.length > 0, "expected at least one advance call");
+    assert.ok(advances.every((call) => call[call.indexOf("--phase") + 1] !== "done"));
+    assert.ok(advances.some((call) => call.includes("verifying")));
+  } finally {
+    restoreEnv("STATE_CORE_DIR", original);
+  }
 });

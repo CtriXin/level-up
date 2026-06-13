@@ -78,6 +78,17 @@ npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> --execute
 
 `level-up run` ensures scan, ideas, work-pack, baseline validation, an isolated worktree, experiment/final validation, deterministic self-review, ledger recording, and optional PR evidence. If the round makes no change or fails validation/review, it records `discard` instead of pretending the attempt worked. Adaptive rounds can turn validation/review failures into focused repair candidates; synthetic repair candidates use their own targeted repair proposal and safe apply plan instead of repeating the failed input. A narrow validation repair can execute a safe command for `git diff --check` whitespace failures.
 
+Run multiple experiments under a budget instead of a single round:
+
+```bash
+# Keep experimenting until a 5-minute wall-clock budget runs out,
+# or 3 consecutive rounds fail to improve (whichever comes first).
+npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> \
+  --execute --budget 5m --max-no-improvement 3 --pr-pack
+```
+
+Stop conditions (`--rounds`, `--budget`, `--max-no-improvement`) default from the goal contract's `stopConditions`; the summary records `stopReason`, `budgetMs`, `elapsedMs`, and `noImprovementRounds`. To let a numeric metric decide keep/discard, write `metric-baseline.json` at the run root and `metric.json` in each `experiments/round-NNN/` directory; absent those files, the binary gates decide. See [docs/experiment-loop.md](docs/experiment-loop.md).
+
 Generate the same loop with a user-readable Chinese report:
 
 ```bash

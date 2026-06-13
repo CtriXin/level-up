@@ -4,17 +4,24 @@
   "title": "LevelUpAutopilotResult",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "runId", "status", "rounds"],
+  "required": ["version", "runId", "status", "stopReason", "rounds"],
   "properties": {
     "version": { "type": "string" },
     "runId": { "type": "string" },
-    "status": { "type": "string", "enum": ["pass", "stopped"] },
+    "status": { "type": "string", "enum": ["pass", "adapted", "stopped"] },
+    "stopReason": {
+      "type": "string",
+      "enum": ["rounds-exhausted", "budget-exhausted", "no-improvement", "blocked"]
+    },
+    "budgetMs": { "type": ["integer", "null"] },
+    "elapsedMs": { "type": "integer" },
+    "noImprovementRounds": { "type": "integer" },
     "rounds": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["round", "candidateId", "decision", "score", "commit", "changed", "runner", "apply", "validation", "review"],
+        "required": ["round", "candidateId", "decision", "score", "commit", "changed", "blocked", "runner", "apply", "validation", "review"],
         "properties": {
           "round": { "type": "integer" },
           "candidateId": { "type": "string" },
@@ -22,6 +29,7 @@
           "score": { "type": "number" },
           "commit": { "type": "string" },
           "changed": { "type": "boolean" },
+          "blocked": { "type": "boolean" },
           "runner": {
             "type": "object"
           },

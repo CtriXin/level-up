@@ -24,53 +24,45 @@ import { selectNextCandidate } from "./strategy.mjs";
 export function runAutopilot(runRootInput, options = {}) {
   const runRoot = resolve(runRootInput);
   const goal = readJson(join(runRoot, "goal.json"));
-  const maxRounds = Number(options.rounds ?? 1);
+  const stop = resolveStopConfig(goal, options);
   const results = [];
   ensureRunInputs(runRoot, goal);
   const worktree = createWorktree(runRoot, { force: Boolean(options.force) });
+  const startedAt = Date.now();
+  let noImprovement = 0;
+  let stopReason = "rounds-exhausted";
 
-  for (let index = 0; index < maxRounds; index += 1) {
-    const state = readJson(join(runRoot, "state.json"));
-    const round = Number(options.round ?? state.currentRound + 1);
-    const ideas = readJson(join(runRoot, "ideas.json"));
-    const strategy = selectNextCandidate(runRoot, {
-      round,
-      candidates: ideas.candidates,
-      requestedId: options.candidate,
-      priorResults: results
-    });
-    const experiment = runRound({
-      runRoot,
-      round,
-      candidate: strategy.candidate,
-      strategy: strategy.manifest,
-      worktreePath: worktree.worktreePath,
-      applyCommand: options.applyCommand,
-      applyPatch: options.applyPatch,
-      applyWriteFile: options.applyWriteFile,
-      applyContent: options.applyContent,
-      applyContentFile: options.applyContentFile,
-      runner: options.runner,
-      runnerProfile: options.runnerProfile,
-      skills: options.skills,
-      mcp: options.mcp,
-      tools: options.tools,
-      execute: Boolean(options.execute),
-      commitKept: Boolean(options.commitKept)
-    });
+  for (let index = 0; index < stop.maxRounds; index += 1) {
+    if (stop.budgetMs != null && Date.now() - startedAt >= stop.budgetMs) {
+      stopReason = "budget-exhausted";
+      break;
+    }
+    const experiment = runNextRound(runRoot, worktree, options, results);
     results.push(experiment);
-    if (experiment.decision !== "keep" && !shouldContinueAfterDiscard(experiment, index, maxRounds, options)) {
+    if (experiment.blocked) {
+      stopReason = "blocked";
+      break;
+    }
+    if (experiment.decision === "keep") {
+      noImprovement = 0;
+    } else if ((noImprovement += 1) >= stop.maxNoImprovement) {
+      stopReason = "no-improvement";
+      break;
+    } else if (!shouldContinueAfterDiscard(experiment, index, stop.maxRounds, options)) {
       break;
     }
   }
 
-  const prPack = options.prPack ? generatePrPack(runRoot, { visual: Boolean(options.visual) }) : null;
   const summary = {
     version: VERSION,
     runId: goal.runId,
     status: summaryStatus(results),
+    stopReason,
     rounds: results,
-    prPack
+    budgetMs: stop.budgetMs,
+    elapsedMs: Date.now() - startedAt,
+    noImprovementRounds: noImprovement,
+    prPack: options.prPack ? generatePrPack(runRoot, { visual: Boolean(options.visual) }) : null
   };
   writeJson(join(runRoot, "autopilot-summary.json"), summary);
   const stateCore = finalizeStateCoreRun(runRoot);
@@ -79,6 +71,49 @@ export function runAutopilot(runRootInput, options = {}) {
     writeJson(join(runRoot, "autopilot-summary.json"), summary);
   }
   return summary;
+}
+
+// Stop conditions come from the goal contract, overridable per run. Default
+// rounds stays 1 (single-shot) unless the caller opts into multi-round via
+// --rounds or a wall-clock --budget; the budget then bounds maxRounds.
+function resolveStopConfig(goal, options) {
+  const limits = goal.stopConditions ?? {};
+  const budgetMs = options.budgetMs != null ? Number(options.budgetMs) : null;
+  const defaultRounds = budgetMs != null ? Number(limits.maxRounds ?? 8) : 1;
+  const maxRounds = Number(options.rounds ?? defaultRounds);
+  const maxNoImprovement = Number(options.maxNoImprovement ?? limits.maxNoImprovementRounds ?? Infinity);
+  return { maxRounds, maxNoImprovement, budgetMs };
+}
+
+function runNextRound(runRoot, worktree, options, results) {
+  const state = readJson(join(runRoot, "state.json"));
+  const round = Number(options.round ?? state.currentRound + 1);
+  const ideas = readJson(join(runRoot, "ideas.json"));
+  const strategy = selectNextCandidate(runRoot, {
+    round,
+    candidates: ideas.candidates,
+    requestedId: options.candidate,
+    priorResults: results
+  });
+  return runRound({
+    runRoot,
+    round,
+    candidate: strategy.candidate,
+    strategy: strategy.manifest,
+    worktreePath: worktree.worktreePath,
+    applyCommand: options.applyCommand,
+    applyPatch: options.applyPatch,
+    applyWriteFile: options.applyWriteFile,
+    applyContent: options.applyContent,
+    applyContentFile: options.applyContentFile,
+    runner: options.runner,
+    runnerProfile: options.runnerProfile,
+    skills: options.skills,
+    mcp: options.mcp,
+    tools: options.tools,
+    execute: Boolean(options.execute),
+    commitKept: Boolean(options.commitKept)
+  });
 }
 
 function ensureRunInputs(runRoot, goal) {
@@ -173,6 +208,9 @@ function runRound({
     review
   });
   const commit = evaluation.decision === "keep" && commitKept ? commitExperiment(worktreePath, candidate) : "0000000";
+  // Unsafe apply is a hard stop. Review blockers remain a discard so the
+  // adaptive repair slot can create a focused follow-up candidate.
+  const blocked = apply.status === "blocked";
 
   const result = {
     version: VERSION,
@@ -182,6 +220,7 @@ function runRound({
     score: evaluation.score,
     commit,
     changed,
+    blocked,
     strategy,
     runner: runnerPacket,
     apply,
@@ -254,6 +293,9 @@ function shouldContinueAfterDiscard(experiment, index, maxRounds, options) {
 }
 
 function summaryStatus(results) {
+  if (results.length === 0) {
+    return "stopped";
+  }
   if (results.every((result) => result.decision === "keep")) {
     return "pass";
   }

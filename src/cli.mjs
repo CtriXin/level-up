@@ -41,6 +41,20 @@ function parseArgv(argv) {
   return args;
 }
 
+// Accepts a wall-clock budget like "5m", "30s", "90000" (bare = ms). Returns
+// milliseconds, or null when the flag is absent or unparseable.
+function parseDuration(value) {
+  if (value == null || value === true) {
+    return null;
+  }
+  const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)?$/.exec(String(value).trim());
+  if (!match) {
+    return null;
+  }
+  const scale = { ms: 1, s: 1000, m: 60000, h: 3600000 }[match[2] || "ms"];
+  return Math.round(Number(match[1]) * scale);
+}
+
 function print(value) {
   if (typeof value === "string") {
     console.log(value);
@@ -59,7 +73,7 @@ Usage:
   level-up work-pack --run <run-root>
   level-up runner-pack --run <run-root> [--runner current-session|opencode-profile|mms-runner|external-command] [--runner-profile <name>]
   level-up dev-loop --run <run-root> --phase baseline|experiment|final [--execute]
-  level-up run --run <run-root> [--execute] [--pr-pack] [--runner <type>] [--runner-profile <name>] [--candidate <id>] [--apply-command <cmd>|--apply-patch <file>|--apply-write-file <path> --apply-content <text>] [--commit-kept] [--rounds <n>]
+  level-up run --run <run-root> [--execute] [--pr-pack] [--rounds <n>] [--budget <5m|30s|ms>] [--max-no-improvement <n>] [--runner <type>] [--runner-profile <name>] [--candidate <id>] [--apply-command <cmd>|--apply-patch <file>|--apply-write-file <path> --apply-content <text>] [--commit-kept]
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
@@ -185,7 +199,9 @@ async function main() {
         mcp: args.mcp,
         tools: args.tools,
         commitKept: Boolean(args["commit-kept"]),
-        rounds: args.rounds
+        rounds: args.rounds === true ? undefined : args.rounds,
+        budgetMs: parseDuration(args.budget),
+        maxNoImprovement: args["max-no-improvement"] === true ? undefined : args["max-no-improvement"]
     });
     if (args.report) {
       summary.report = generateRunReport(runRoot, reportOptions(args));
