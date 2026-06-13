@@ -44,6 +44,21 @@ or interaction, the PR must include visual evidence:
 The annotation is not decoration. It is the bridge between "AI changed the UI"
 and "the human can see exactly what changed."
 
+## Redline Final Gate
+
+After the PR/MR exists and review evidence is attached, run:
+
+```bash
+npm run level-up -- redline-final --run <run-root> --url <pr-or-mr-url>
+```
+
+`redline-final` consumes provider metadata, local validation, level-up evidence,
+optional Digger evidence (`--digger-run`), and optional external LLM audit
+(`--llm-audit`). Only `mergeable` passes the final gate. `needs-review`,
+`blocked`, `unknown`, missing URL, or adapter failure must stop before merge.
+It must not approve, merge, deploy, force-push, or edit product code. PR/MR
+comments require explicit `--comment`.
+
 ## Merge Policy
 
 Autopilot may push branches and open PRs. It must not merge, deploy, or mutate

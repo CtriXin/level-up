@@ -246,6 +246,9 @@ function renderRedline(redline) {
   if (redline.decision) {
     lines.push(`- decision: \`${redline.decision}\``);
   }
+  if (redline.finalGate && redline.finalGateStatus) {
+    lines.push(`- final gate: \`${redline.finalGateStatus}\``);
+  }
   if (redline.reason) {
     lines.push(`- reason: \`${redline.reason}\``);
   }

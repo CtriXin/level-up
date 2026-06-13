@@ -49,7 +49,8 @@ The core runtime owns the loop, state, ledger, and safety boundaries. Slots add 
 - `runner`: current session now; future opencode/MMS/external model process adapters.
 - `apply`: structured worktree mutation via command, patch, or file-write manifests.
 - `notify`: Feishu/GitHub/GitLab notification adapters after PR or MR creation.
-- `redline`: optional PR/MR merge-readiness audit through sibling `redline-guard`.
+- `redline`: optional PR/MR merge-readiness evidence adapter through sibling `redline-guard`.
+- `redline-final`: final pre-merge gate wrapper; only `mergeable` passes, and it never approves, merges, deploys, or force-pushes.
 - `cleanup`: remove clean merged experiment worktree folders after PR/MR merge.
 
 ## Quick Start
@@ -129,10 +130,10 @@ npm run level-up -- post-merge --repo /path/to/repo --base-ref origin/main \
 
 The cleanup command skips the current worktree, protected branches, dirty worktrees, and worktrees whose HEAD is not already merged into the base ref. Without `--execute`, it only reports what would be removed. Add `--delete-branches` only when the local merged branch reference should be removed after the worktree folder is removed. `post-merge` wraps the same safety checks and writes `POST_MERGE_CLEANUP.zh.md` plus `post-merge-cleanup.json` when `--run` or `--output-dir` is provided. Branch pruning is off by default; use `--prune-branches --branch-prefix codex/` only for merged agent-owned local branches.
 
-Run the optional `redline-guard` audit after a PR/MR exists:
+Run the final `redline-guard` pre-merge gate after a PR/MR exists:
 
 ```bash
-npm run level-up -- redline --run /path/to/project/.level-up/runs/<run-id> \
+npm run level-up -- redline-final --run /path/to/project/.level-up/runs/<run-id> \
   --url "https://github.com/org/repo/pull/123" \
   --validate --notify
 ```
@@ -145,7 +146,7 @@ npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id> \
   --redline
 ```
 
-`redline` is an optional adapter. It first looks for a configured `--redline-bin` or `LEVEL_UP_REDLINE_BIN`, then a sibling `../redline-guard/src/cli.mjs`, then `redline-guard` on PATH. If none exists, the run records `skipped` instead of failing the L3 loop.
+`redline` is evidence-only; `redline-final` is the final pre-merge gate. Both first look for a configured `--redline-bin` or `LEVEL_UP_REDLINE_BIN`, then a sibling `../redline-guard/src/cli.mjs`, then `redline-guard` on PATH. By default `level-up` passes `--evidence <run-root>` so the adapter can inspect local run artifacts; pass `--evidence false` when evidence should be omitted. For final pre-merge use, prefer `redline-final`; only `mergeable` passes `finalGateStatus`. `needs-review`, `blocked`, `unknown`, missing URL, or adapter failure must stop before merge. `--notify` does not request PR/MR comments; comments are never posted unless `--comment` is explicitly passed.
 
 ```bash
 npm run level-up -- notify \
