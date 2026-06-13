@@ -16,11 +16,28 @@ implemented by different renderers.
 ## Runtime Responsibilities
 
 - Create and persist a `goal contract`.
+- Optionally bind that run to a canonical state-core `task-state.json`.
 - Scan the target repository and record facts.
 - Create isolated worktrees for experiments.
 - Keep a structured ledger.
 - Track stop conditions and blockers.
 - Preserve enough state to resume after interruption.
+
+## state-core Boundary
+
+When a run has a canonical task id, level-up reads and writes it only through the state-core CLI. The adapter is centralized in `src/state-core.mjs` and uses Node's built-in child process APIs.
+
+```text
+state-core task-state.json = canonical truth
+.level-up/runs/<run-id>/   = runtime state, ledger, and evidence
+```
+
+Lifecycle binding:
+
+- init reads the canonical intent and sets `runner=level-up`;
+- keep/discard/crash ledger entries map to state-core slot reports;
+- finalization sets `ledger_ref` and advances to `verifying`;
+- level-up does not self-declare `done`; state-core's done-gate owns that transition.
 
 ## Slot Responsibilities
 

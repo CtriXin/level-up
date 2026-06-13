@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -11,13 +11,22 @@ import { buildFeishuPostPayload, notifyFeishu } from "../src/notify.mjs";
 import { generatePrPack } from "../src/pr-pack.mjs";
 import { runRedlineAudit } from "../src/redline.mjs";
 import { generateRunReport } from "../src/report.mjs";
-import { appendLedger, createRun, createWorktree, scanTarget } from "../src/runtime.mjs";
+import { appendLedger, createRun, createWorktree, finalizeStateCoreRun, readJson, scanTarget } from "../src/runtime.mjs";
 import { generateRunnerPacket } from "../src/runner.mjs";
 import { reviewExperiment } from "../src/self-review.mjs";
 import { selectNextCandidate } from "../src/strategy.mjs";
 import { generateWorkPack } from "../src/work-pack.mjs";
 import { cleanupMergedWorktrees } from "../src/worktree-cleanup.mjs";
 import runPostMergeCleanup from "../src/post-merge.mjs";
+import {
+  StateCoreCliError,
+  advance,
+  readTaskState,
+  reportSlot,
+  resolveStateCoreCli,
+  setLedger,
+  setRunner
+} from "../src/state-core.mjs";
 
 function sh(cwd, command, args) {
   const result = spawnSync(command, args, {
@@ -58,6 +67,53 @@ function fixtureRepo() {
   return dir;
 }
 
+function fakeStateCore({ readState, failAdvanceDone = false } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "level-up-state-core-"));
+  mkdirSync(join(dir, "src"), { recursive: true });
+  const logPath = join(dir, "calls.jsonl");
+  const cliPath = join(dir, "src", "cli.py");
+  writeFileSync(
+    cliPath,
+    `#!/usr/bin/env python3
+import json
+import sys
+
+args = sys.argv[1:]
+with open(${JSON.stringify(logPath)}, "a", encoding="utf-8") as handle:
+    handle.write(json.dumps(args, ensure_ascii=False) + "\\n")
+
+command = args[0] if args else ""
+if command == "read":
+    print(json.dumps(${JSON.stringify(readState ?? {
+      schema_version: "0.1.0",
+      task_id: "demo-task",
+      intent: {"raw": "Raw intent", "goal": "Goal from state", "kind": "feature"},
+      size: "medium",
+      risk: "low",
+      phase: "intake",
+      slots: {},
+      human_decisions: [],
+      next_action: "Run level-up"
+    })}, ensure_ascii=False))
+elif command == "advance" and "--phase" in args and args[args.index("--phase") + 1] == "done" and ${failAdvanceDone ? "True" : "False"}:
+    print("error: cannot advance to done; unmet slots: ['recorder']", file=sys.stderr)
+    raise SystemExit(1)
+else:
+    print("/tmp/state-path")
+`
+  );
+  chmodSync(cliPath, 0o755);
+  return { dir, logPath, calls: () => readFileSync(logPath, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) };
+}
+
+function restoreEnv(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
+
 test("createRun writes a goal contract and ready state", () => {
   const repo = fixtureRepo();
   const result = createRun({
@@ -71,6 +127,48 @@ test("createRun writes a goal contract and ready state", () => {
   assert.equal(result.state.status, "ready");
 });
 
+test("state-core adapter reads JSON and reports clear missing CLI errors", () => {
+  const fake = fakeStateCore();
+  const state = readTaskState("demo-task", { stateCoreDir: fake.dir });
+
+  assert.equal(state.intent.goal, "Goal from state");
+  assert.deepEqual(fake.calls()[0], ["read", "--task-id", "demo-task"]);
+  assert.equal(resolveStateCoreCli({ stateCoreDir: fake.dir }).endsWith("src/cli.py"), true);
+  assert.throws(
+    () => readTaskState("missing", { stateCoreDir: join(fake.dir, "missing") }),
+    (error) => error instanceof StateCoreCliError && /state-core CLI not found/.test(error.message)
+  );
+});
+
+test("state-core adapter wraps set, report, and advance CLI commands", () => {
+  const fake = fakeStateCore();
+
+  setRunner("demo-task", { stateCoreDir: fake.dir });
+  setLedger("demo-task", ".level-up/runs/run-1/", { stateCoreDir: fake.dir });
+  reportSlot("demo-task", "verify", "pass", "kept useful experiment", {
+    stateCoreDir: fake.dir,
+    evidenceRefs: [".level-up/runs/run-1/ledger.tsv"],
+    details: { runRoot: ".level-up/runs/run-1" }
+  });
+  advance("demo-task", "verifying", { stateCoreDir: fake.dir });
+
+  const calls = fake.calls();
+  assert.deepEqual(calls[0], ["set", "--task-id", "demo-task", "--runner", "level-up"]);
+  assert.deepEqual(calls[1], ["set", "--task-id", "demo-task", "--ledger-ref", ".level-up/runs/run-1/"]);
+  assert.equal(calls[2][0], "report");
+  assert.ok(calls[2].includes("--details-json"));
+  assert.deepEqual(calls[3], ["advance", "--task-id", "demo-task", "--phase", "verifying"]);
+});
+
+test("state-core adapter propagates done-gate failures", () => {
+  const fake = fakeStateCore({ failAdvanceDone: true });
+
+  assert.throws(
+    () => advance("demo-task", "done", { stateCoreDir: fake.dir }),
+    (error) => error instanceof StateCoreCliError && error.stderr.includes("unmet slots")
+  );
+});
+
 test("createRun normalizes long metric names for readable packets", () => {
   const repo = fixtureRepo();
   const result = createRun({
@@ -79,6 +177,24 @@ test("createRun normalizes long metric names for readable packets", () => {
     metric: "Increase runtime usefulness by adding candidate generation while keeping tests and schemas passing"
   });
   assert.equal(result.goal.primaryMetric.name.endsWith("_"), false);
+});
+
+test("createRun can bind a canonical state-core task without breaking run files", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Goal from state",
+    stateCoreTask: {
+      taskId: "demo-task",
+      size: "medium",
+      intentRaw: "Raw intent"
+    }
+  });
+
+  assert.equal(result.goal.stateCore.taskId, "demo-task");
+  assert.equal(result.goal.stateCore.size, "medium");
+  assert.equal(result.goal.stateCore.slot, "verify");
+  assert.equal(readJson(join(result.runRoot, "goal.json")).stateCore.taskId, "demo-task");
 });
 
 test("scanTarget detects package scripts and frameworks", () => {
@@ -199,6 +315,87 @@ test("appendLedger records rounds and stops at max rounds", () => {
   });
   assert.equal(recorded.round, 1);
   assert.equal(recorded.state.status, "stopped");
+});
+
+test("appendLedger does not require state-core when no canonical task is bound", () => {
+  const repo = fixtureRepo();
+  const fake = fakeStateCore();
+  const original = process.env.STATE_CORE_DIR;
+  process.env.STATE_CORE_DIR = join(fake.dir, "missing");
+  try {
+    const result = createRun({ target: repo, goal: "Legacy standalone run" });
+    const recorded = appendLedger(result.runRoot, {
+      status: "keep",
+      score: 1,
+      description: "legacy keep"
+    });
+    assert.equal(recorded.status, "keep");
+  } finally {
+    restoreEnv("STATE_CORE_DIR", original);
+  }
+});
+
+test("appendLedger maps keep/discard to state-core slot reports", () => {
+  const repo = fixtureRepo();
+  const fake = fakeStateCore();
+  const original = process.env.STATE_CORE_DIR;
+  process.env.STATE_CORE_DIR = fake.dir;
+  try {
+    const keepRun = createRun({
+      target: repo,
+      goal: "Keep useful runtime result",
+      stateCoreTask: { taskId: "medium-task", size: "medium" }
+    });
+    appendLedger(keepRun.runRoot, {
+      status: "keep",
+      score: 1,
+      description: "medium verification passed"
+    });
+    const keepReport = fake.calls().find((call) => call[0] === "report");
+    assert.ok(keepReport);
+    assert.ok(keepReport.includes("--slot"));
+    assert.equal(keepReport[keepReport.indexOf("--slot") + 1], "verify");
+    assert.equal(keepReport[keepReport.indexOf("--verdict") + 1], "pass");
+
+    const largeRun = createRun({
+      target: repo,
+      goal: "Discard failed runtime result",
+      stateCoreTask: { taskId: "large-task", size: "large" }
+    });
+    appendLedger(largeRun.runRoot, {
+      status: "discard",
+      score: 0,
+      description: "large executor failed"
+    });
+    const reports = fake.calls().filter((call) => call[0] === "report");
+    const discardReport = reports.at(-1);
+    assert.equal(discardReport[discardReport.indexOf("--slot") + 1], "executor");
+    assert.equal(discardReport[discardReport.indexOf("--verdict") + 1], "fail");
+  } finally {
+    restoreEnv("STATE_CORE_DIR", original);
+  }
+});
+
+test("finalizeStateCoreRun writes ledger_ref and advances phase", () => {
+  const repo = fixtureRepo();
+  const fake = fakeStateCore();
+  const original = process.env.STATE_CORE_DIR;
+  process.env.STATE_CORE_DIR = fake.dir;
+  try {
+    const result = createRun({
+      target: repo,
+      goal: "Finalize runtime state",
+      stateCoreTask: { taskId: "finalize-task", size: "medium" }
+    });
+    const finalized = finalizeStateCoreRun(result.runRoot);
+    assert.equal(finalized.taskId, "finalize-task");
+    assert.equal(finalized.phase, "verifying");
+    const calls = fake.calls();
+    assert.ok(calls.some((call) => call[0] === "set" && call.includes("--ledger-ref")));
+    assert.ok(calls.some((call) => call[0] === "advance" && call.includes("verifying")));
+  } finally {
+    restoreEnv("STATE_CORE_DIR", original);
+  }
 });
 
 test("generateIdeas writes structured experiment candidates", () => {

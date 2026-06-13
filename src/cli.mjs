@@ -19,6 +19,7 @@ import { generateRunReport } from "./report.mjs";
 import { runRedlineAudit } from "./redline.mjs";
 import { cleanupMergedWorktrees } from "./worktree-cleanup.mjs";
 import runPostMergeCleanup from "./post-merge.mjs";
+import { readTaskState, setRunner, taskStateToRunGoal } from "./state-core.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -52,7 +53,7 @@ function help() {
   return `level-up ${VERSION}
 
 Usage:
-  level-up init --target <repo> --goal <goal> [--metric <metric>]
+  level-up init --target <repo> (--goal <goal>|--task-id <state-core-task>) [--metric <metric>]
   level-up scan --run <run-root>
   level-up ideas --run <run-root>
   level-up work-pack --run <run-root>
@@ -90,20 +91,35 @@ async function main() {
   }
 
   if (command === "init") {
+    const stateCore = args["task-id"] ? readTaskState(args["task-id"], stateCoreOptions(args)) : null;
+    const goal = args.goal === true ? null : args.goal;
     const result = createRun({
       target: args.target ?? ".",
       workspace: args.workspace,
-      goal: requireValue(args, "goal"),
+      goal: goal || (stateCore ? taskStateToRunGoal(stateCore) : requireValue(args, "goal")),
       metric: args.metric,
       maxRounds: args["max-rounds"],
       maxMinutesPerRound: args["max-minutes-per-round"],
       maxNoImprovementRounds: args["max-no-improvement-rounds"],
-      allowDirty: Boolean(args["allow-dirty"])
+      allowDirty: Boolean(args["allow-dirty"]),
+      stateCoreTask: stateCore
+        ? {
+            taskId: stateCore.task_id,
+            size: stateCore.size,
+            intentRaw: stateCore.intent?.raw,
+            root: args["state-root"] === true ? null : args["state-root"],
+            stateCoreDir: args["state-core-dir"] === true ? null : args["state-core-dir"]
+          }
+        : null
     });
+    if (stateCore) {
+      setRunner(stateCore.task_id, stateCoreOptions(args));
+    }
     print({
       runRoot: result.runRoot,
       status: result.state.status,
-      nextAction: result.state.nextAction
+      nextAction: result.state.nextAction,
+      stateCore: result.goal.stateCore ?? null
     });
     return;
   }
@@ -302,6 +318,13 @@ function redlineOptions(args) {
     webhookUrl: args["webhook-url"] === true ? null : args["webhook-url"],
     bin: args["redline-bin"] === true ? null : args["redline-bin"],
     timeoutMs: args["redline-timeout-ms"] === true ? null : args["redline-timeout-ms"]
+  };
+}
+
+function stateCoreOptions(args) {
+  return {
+    stateCoreDir: args["state-core-dir"] === true ? null : args["state-core-dir"],
+    root: args["state-root"] === true ? null : args["state-root"]
   };
 }
 

@@ -2,3 +2,7 @@ node_modules/
 .level-up/
 *.log
 .DS_Store
+
+# 工具链自建运行时目录（绝不进仓库）
+.xmem/
+.codegraph/

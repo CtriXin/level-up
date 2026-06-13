@@ -177,6 +177,27 @@ npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id>
 
 The CLI is only the fallback renderer. The durable contract is the files under `.level-up/runs/<run-id>/`.
 
+## state-core Binding
+
+`level-up` can bind a run to a canonical state-core task when Mommy hands off a `task_id`.
+
+```bash
+STATE_CORE_DIR=/Users/xin/auto-skills/CtriXin-repo/state-core \
+npm run level-up -- init --target /path/to/project --task-id <task-id>
+```
+
+The adapter resolves state-core from `STATE_CORE_DIR`, falling back to a sibling `../state-core`, and calls `python3 <state-core>/src/cli.py`. Node never imports Python code directly.
+
+Binding behavior:
+
+- init reads `task-state.json` through `cli.py read`, uses `intent.goal` / `intent.raw` as the level-up goal, and sets `runner=level-up`;
+- keep records report `pass` to the related slot (`verify` for medium/small, `executor` for large);
+- discard/crash records report `fail`, producing a state-core blocker;
+- finalize writes `ledger_ref` to the `.level-up/runs/<run-id>/` root and advances the canonical phase to `verifying`;
+- `done` remains state-core's decision through `cli.py advance --phase done`; if the gate blocks, level-up reports the unmet slots instead of declaring completion.
+
+Canonical truth lives in state-core. `.level-up/runs/*` is runtime state and evidence for the loop, not a replacement for `task-state.json`.
+
 ## Interview vs Grill
 
 Use `interview` as the default intake slot: inspect local evidence first, ask 1-3 questions only when answers change objective, metric, guardrails, irreversible scope, or human gates, and accept `defaults` / `你定` / `先做`.

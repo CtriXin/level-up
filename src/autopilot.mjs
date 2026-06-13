@@ -7,6 +7,7 @@ import {
   appendLedger,
   createWorktree,
   ensureDir,
+  finalizeStateCoreRun,
   readJson,
   runGit,
   scanTarget,
@@ -72,6 +73,11 @@ export function runAutopilot(runRootInput, options = {}) {
     prPack
   };
   writeJson(join(runRoot, "autopilot-summary.json"), summary);
+  const stateCore = finalizeStateCoreRun(runRoot);
+  if (stateCore) {
+    summary.stateCore = stateCore;
+    writeJson(join(runRoot, "autopilot-summary.json"), summary);
+  }
   return summary;
 }
 

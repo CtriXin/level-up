@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, basename, resolve } from "node:path";
+import { advance, reportSlot, setLedger } from "./state-core.mjs";
 
 export const VERSION = "0.1.0";
 
@@ -186,6 +187,9 @@ export function createRun(options) {
     },
     humanGates: ["merge", "deploy", "production data mutation", "cross-repository write"]
   };
+  if (options.stateCoreTask) {
+    goal.stateCore = normalizeStateCoreTask(options.stateCoreTask);
+  }
 
   const state = {
     runId,
@@ -363,5 +367,59 @@ export function appendLedger(runRootInput, entry) {
     updatedAt: createdAt
   };
   writeJson(join(runRoot, "state.json"), nextState);
+  syncLedgerToStateCore({ runRoot, goal, status, description });
   return { round, status, state: nextState };
+}
+
+export function finalizeStateCoreRun(runRootInput, options = {}) {
+  const runRoot = resolve(runRootInput);
+  const goal = readJson(join(runRoot, "goal.json"));
+  if (!goal.stateCore?.taskId) {
+    return null;
+  }
+  const stateCoreOptions = runtimeStateCoreOptions(goal, options.stateCore);
+  setLedger(goal.stateCore.taskId, options.ledgerRef ?? runRoot, stateCoreOptions);
+  const phase = options.phase ?? "verifying";
+  const advanced = advance(goal.stateCore.taskId, phase, stateCoreOptions);
+  return { taskId: goal.stateCore.taskId, ledgerRef: options.ledgerRef ?? runRoot, phase, advanced };
+}
+
+function normalizeStateCoreTask(task) {
+  if (!task.taskId) {
+    throw new Error("stateCoreTask.taskId is required");
+  }
+  return {
+    taskId: task.taskId,
+    size: task.size ?? null,
+    slot: task.slot ?? defaultStateCoreSlot(task.size),
+    intentRaw: task.intentRaw ?? null,
+    root: task.root ?? null,
+    stateCoreDir: task.stateCoreDir ?? null
+  };
+}
+
+function defaultStateCoreSlot(size) {
+  return size === "large" ? "executor" : "verify";
+}
+
+function syncLedgerToStateCore({ runRoot, goal, status, description }) {
+  if (!goal.stateCore?.taskId) {
+    return;
+  }
+  const verdict = status === "keep" ? "pass" : "fail";
+  const slot = goal.stateCore.slot || defaultStateCoreSlot(goal.stateCore.size);
+  reportSlot(goal.stateCore.taskId, slot, verdict, description, {
+    ...runtimeStateCoreOptions(goal),
+    details: {
+      runRoot,
+      levelUpStatus: status
+    }
+  });
+}
+
+function runtimeStateCoreOptions(goal, overrides = {}) {
+  return {
+    stateCoreDir: overrides?.stateCoreDir ?? goal.stateCore?.stateCoreDir ?? undefined,
+    root: overrides?.root ?? goal.stateCore?.root ?? undefined
+  };
 }
