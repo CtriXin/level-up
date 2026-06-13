@@ -960,6 +960,46 @@ test("runAutopilot honors a wall-clock budget and records timing", () => {
   assert.equal(typeof summary.elapsedMs, "number");
 });
 
+test("runAutopilot records a soft round-timeout stop after an over-budget round", () => {
+  const repo = fixtureRepo();
+  const result = createRun({
+    target: repo,
+    goal: "Stop after a round exceeds its per-round time budget",
+    metric: "Increase timeout explainability",
+    maxMinutesPerRound: 1
+  });
+  const originalNow = Date.now;
+  let calls = 0;
+  Date.now = () => (calls++ < 2 ? 0 : 60000);
+  let summary;
+  try {
+    summary = runAutopilot(result.runRoot, {
+      rounds: 3,
+      execute: true,
+      runner: "current-session",
+      applyWriteFile: "proof/round-timeout.txt",
+      applyContent: "round timeout proof\n"
+    });
+  } finally {
+    Date.now = originalNow;
+  }
+
+  assert.equal(summary.stopReason, "round-timeout");
+  assert.equal(summary.rounds.length, 1);
+  assert.equal(summary.rounds[0].decision, "keep");
+});
+
+test("autopilot result schema declares emitted summary and round fields", () => {
+  const schema = readJson(join(process.cwd(), "schemas", "autopilot-result.schema.json"));
+  for (const key of ["stateCore", "report"]) {
+    assert.ok(schema.properties[key], `missing top-level schema property ${key}`);
+  }
+  const roundProperties = schema.properties.rounds.items.properties;
+  for (const key of ["blocked", "strategy", "evaluation"]) {
+    assert.ok(roundProperties[key], `missing round schema property ${key}`);
+  }
+});
+
 test("evaluateExperiment keeps only metric-improving experiments when a metric exists", () => {
   const repo = fixtureRepo();
   const result = createRun({

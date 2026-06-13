@@ -46,7 +46,7 @@ export function runAutopilot(runRootInput, options = {}) {
     }
     // maxMinutesPerRound is enforced post-hoc (soft): a round that overran its
     // budget completes, then the loop stops before launching another.
-    if (stop.maxRoundMs != null && Date.now() - roundStart > stop.maxRoundMs) {
+    if (stop.maxRoundMs != null && Date.now() - roundStart >= stop.maxRoundMs) {
       stopReason = "round-timeout";
       break;
     }
@@ -56,6 +56,9 @@ export function runAutopilot(runRootInput, options = {}) {
       stopReason = "no-improvement";
       break;
     } else if (!shouldContinueAfterDiscard(experiment, index, stop.maxRounds, options)) {
+      if (options.adaptive === false && index < stop.maxRounds - 1) {
+        stopReason = "no-improvement";
+      }
       break;
     }
   }
@@ -141,6 +144,8 @@ function ensureRunInputs(runRoot, goal) {
   }
 }
 
+// REDLINE_EXCEPTION(runRound): one orchestration seam keeps the round artifact,
+// apply, validation, review, evaluation, incumbent update, and ledger write in order.
 function runRound({
   runRoot,
   round,

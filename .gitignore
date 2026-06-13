@@ -6,3 +6,4 @@ node_modules/
 # 工具链自建运行时目录（绝不进仓库）
 .xmem/
 .codegraph/
+.review-hub/

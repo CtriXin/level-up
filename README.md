@@ -87,7 +87,7 @@ npm run level-up -- run --run /path/to/project/.level-up/runs/<run-id> \
   --execute --budget 5m --max-no-improvement 3 --pr-pack
 ```
 
-Stop conditions default from the goal contract's `stopConditions` (`maxRounds`, `maxWallClockMs`, `maxMinutesPerRound`, `maxNoImprovementRounds`) and are overridden per run by `--rounds`, `--budget`, and `--max-no-improvement`. The summary records `stopReason`, `budgetMs`, `elapsedMs`, and `noImprovementRounds`. To let a numeric metric decide keep/discard, write `metric-baseline.json` at the run root and `metric.json` in each `experiments/round-NNN/`; each round is scored against the best kept value so far (the incumbent), and the runtime advances `metric-incumbent.json` after every keep. Absent those files, the binary gates decide. See [docs/experiment-loop.md](docs/experiment-loop.md).
+Stop conditions default from the goal contract's `stopConditions` (`maxRounds`, `maxWallClockMs`, `maxMinutesPerRound`, `maxNoImprovementRounds`) and are overridden per run by `--rounds`, `--budget`, and `--max-no-improvement`. The summary records `stopReason` (`rounds-exhausted`, `budget-exhausted`, `no-improvement`, `round-timeout`, `blocked`), `budgetMs`, `elapsedMs`, and `noImprovementRounds`. To let a numeric metric decide keep/discard, write `metric-baseline.json` at the run root and `metric.json` in each `experiments/round-NNN/`; each round is scored against the best kept value so far (the incumbent), and the runtime advances `metric-incumbent.json` after every keep. Absent those files, the binary gates decide. See [docs/experiment-loop.md](docs/experiment-loop.md).
 
 Generate the same loop with a user-readable Chinese report:
 
