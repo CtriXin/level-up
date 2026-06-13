@@ -146,7 +146,7 @@ npm run level-up -- report --run /path/to/project/.level-up/runs/<run-id> \
   --redline
 ```
 
-`redline` is evidence-only; `redline-final` is the final pre-merge gate. Both first look for a configured `--redline-bin` or `LEVEL_UP_REDLINE_BIN`, then a sibling `../redline-guard/src/cli.mjs`, then `redline-guard` on PATH. By default `level-up` passes `--evidence <run-root>` so the adapter can inspect local run artifacts; pass `--evidence false` only through API options when evidence should be omitted. For final pre-merge use, prefer `redline-final`; only `mergeable` passes `finalGateStatus`. `needs-review`, `blocked`, `unknown`, missing URL, or adapter failure must stop before merge. `--notify` does not request PR/MR comments; comments are never posted unless `--comment` is explicitly passed.
+`redline` is evidence-only; `redline-final` is the final pre-merge gate. Both first look for a configured `--redline-bin` or `LEVEL_UP_REDLINE_BIN`, then a sibling `../redline-guard/src/cli.mjs`, then `redline-guard` on PATH. By default `level-up` passes `--evidence <run-root>` so the adapter can inspect local run artifacts; pass `--evidence false` when evidence should be omitted. For final pre-merge use, prefer `redline-final`; only `mergeable` passes `finalGateStatus`. `needs-review`, `blocked`, `unknown`, missing URL, or adapter failure must stop before merge. `--notify` does not request PR/MR comments; comments are never posted unless `--comment` is explicitly passed.
 
 ```bash
 npm run level-up -- notify \

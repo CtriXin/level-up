@@ -62,8 +62,8 @@ Usage:
   level-up worktree --run <run-root> [--force]
   level-up record --run <run-root> --status keep|discard|crash --description <text> [--score <n>]
   level-up pr-pack --run <run-root> [--visual] [--reviewer-bot <name>]
-  level-up redline --run <run-root> --url <pr-or-mr-url> [--validate] [--notify] [--digger-run <dir>] [--llm-audit <file>] [--comment]
-  level-up redline-final --run <run-root> --url <pr-or-mr-url> [--validate] [--notify] [--digger-run <dir>] [--llm-audit <file>] [--comment]
+  level-up redline --run <run-root> --url <pr-or-mr-url> [--validate] [--notify] [--digger-run <dir>] [--llm-audit <file>] [--evidence <dir|false>] [--comment]
+  level-up redline-final --run <run-root> --url <pr-or-mr-url> [--validate] [--notify] [--digger-run <dir>] [--llm-audit <file>] [--evidence <dir|false>] [--comment]
   level-up report --run <run-root> [--format zh] [--link <pr-or-mr-url>] [--notify-status <text>]
   level-up notify --channel feishu --repo <name> --branch <source -> target> --title <title> --link <url> [--dry-run]
   level-up cleanup-worktrees [--repo <repo>] [--base-ref origin/main] [--execute] [--delete-branches]
@@ -221,7 +221,11 @@ async function main() {
   }
 
   if (command === "redline-final") {
-    print(runRedlineFinalGate(requireValue(args, "run"), redlineOptions(args)));
+    const result = runRedlineFinalGate(requireValue(args, "run"), redlineOptions(args));
+    print(result);
+    if (result.finalGateStatus !== "pass") {
+      process.exitCode = 1;
+    }
     return;
   }
 
@@ -307,7 +311,7 @@ function redlineOptions(args) {
     comment: Boolean(args.comment),
     diggerRun: args["digger-run"] === true ? null : args["digger-run"],
     llmAudit: args["llm-audit"] === true ? null : args["llm-audit"],
-    evidence: args.evidence === true ? null : args.evidence,
+    evidence: args.evidence === "false" ? false : (args.evidence === true ? null : args.evidence),
     reportUrl: args["report-url"] === true ? null : args["report-url"],
     webhookUrl: args["webhook-url"] === true ? null : args["webhook-url"],
     bin: args["redline-bin"] === true ? null : args["redline-bin"],

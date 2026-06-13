@@ -39,7 +39,9 @@ export function runRedlineAudit(runRootInput, options = {}) {
 
   if (!url) {
     manifest.reason = "missing_pr_or_mr_url";
-    manifest.finalGateStatus = finalGate ? "blocked" : "skipped";
+    if (finalGate) {
+      manifest.finalGateStatus = "blocked";
+    }
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }
@@ -47,7 +49,9 @@ export function runRedlineAudit(runRootInput, options = {}) {
   const command = resolveRedlineCommand(options);
   if (!command) {
     manifest.reason = "redline_guard_not_found";
-    manifest.finalGateStatus = finalGate ? "blocked" : "skipped";
+    if (finalGate) {
+      manifest.finalGateStatus = "blocked";
+    }
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }
@@ -86,7 +90,9 @@ export function runRedlineAudit(runRootInput, options = {}) {
   if (result.error) {
     manifest.status = command.optional && result.error.code === "ENOENT" ? "skipped" : "failed";
     manifest.reason = result.error.code || result.error.message;
-    manifest.finalGateStatus = finalGate ? "blocked" : manifest.status;
+    if (finalGate) {
+      manifest.finalGateStatus = "blocked";
+    }
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }
@@ -94,7 +100,9 @@ export function runRedlineAudit(runRootInput, options = {}) {
   if (result.status !== 0) {
     manifest.status = "failed";
     manifest.reason = "redline_guard_exit_nonzero";
-    manifest.finalGateStatus = finalGate ? "blocked" : "failed";
+    if (finalGate) {
+      manifest.finalGateStatus = "blocked";
+    }
     writeJson(manifest.files.manifest, manifest);
     return manifest;
   }

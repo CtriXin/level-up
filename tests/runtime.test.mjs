@@ -740,7 +740,13 @@ test("runRedlineAudit reports non-final adapter failures without final gate bloc
 
   assert.equal(redline.status, "failed");
   assert.equal(redline.reason, "redline_guard_exit_nonzero");
-  assert.equal(redline.finalGateStatus, "failed");
+  assert.equal(redline.finalGateStatus, undefined);
+
+  const report = generateRunReport(result.runRoot, {
+    link: "https://github.com/CtriXin/example/pull/2"
+  });
+  const reportText = readFileSync(report.files.report, "utf8");
+  assert.doesNotMatch(reportText, /final gate:/);
 });
 
 test("runRedlineFinalGate blocks adapter failures and non-mergeable decisions", () => {
@@ -798,4 +804,13 @@ test("runRedlineFinalGate blocks when PR or MR URL is missing", () => {
   assert.equal(redline.reason, "missing_pr_or_mr_url");
   assert.equal(redline.finalGateStatus, "blocked");
   assert.ok(existsSync(redline.files.manifest));
+
+  const cli = spawnSync(process.execPath, ["src/cli.mjs", "redline-final", "--run", result.runRoot], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  assert.equal(cli.status, 1, cli.stderr);
+  const cliResult = JSON.parse(cli.stdout);
+  assert.equal(cliResult.finalGateStatus, "blocked");
 });
