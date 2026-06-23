@@ -1,3 +1,4 @@
+// 独立机器 intake 源:不依赖 level-up 执行环,可被外部复用;入口见 machine-intake.mjs
 /**
  * auto-research.mjs — pure function module for generating improvement candidates.
  *

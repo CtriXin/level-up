@@ -1,3 +1,4 @@
+// DEPRECATED/FROZEN: level-up 执行环已废弃,改用 looper;勿新增依赖。见 docs/STATUS.md
 import { runGit, VERSION } from "./runtime.mjs";
 
 const UNSAFE_COMMAND_PATTERNS = [

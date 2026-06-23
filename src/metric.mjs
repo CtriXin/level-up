@@ -1,3 +1,4 @@
+// DEPRECATED/FROZEN: level-up 执行环已废弃,改用 looper;勿新增依赖。见 docs/STATUS.md
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { readJson } from "./runtime.mjs";
