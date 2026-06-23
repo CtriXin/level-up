@@ -21,6 +21,7 @@ import { cleanupMergedWorktrees } from "./worktree-cleanup.mjs";
 import runPostMergeCleanup from "./post-merge.mjs";
 import { readTaskState, setRunner, taskStateToRunGoal } from "./state-core.mjs";
 import { parseDuration } from "./duration.mjs";
+import { runMachineIntake } from "./machine-intake.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -71,6 +72,7 @@ Usage:
   level-up cleanup-worktrees [--repo <repo>] [--base-ref origin/main] [--execute] [--delete-branches]
   level-up post-merge [--repo <repo>] [--base-ref origin/main] [--run <run-root>] [--output-dir <dir>] [--execute] [--delete-branches] [--prune-branches] [--branch-prefix codex/]
   level-up status --run <run-root>
+  level-up machine-intake --target <repo path> --goal <goal.json path> --state-core-dir <dir> [--data-root <dir>] [--evidence-dir <dir>] [--limit N] [--dry-run]
 
 L3 local autopilot stops before merge, deploy, and irreversible actions.`;
 }
@@ -302,6 +304,36 @@ async function main() {
       goal: readJson(resolve(runRoot, "goal.json")),
       state: readJson(resolve(runRoot, "state.json"))
     });
+    return;
+  }
+
+  if (command === "machine-intake") {
+    const targetPath = resolve(requireValue(args, "target"));
+    const goalPath = resolve(requireValue(args, "goal"));
+    const stateCoreDir = resolve(requireValue(args, "state-core-dir"));
+    const dataRoot = args["data-root"] && args["data-root"] !== true
+      ? resolve(args["data-root"])
+      : undefined;
+    const evidenceDir = args["evidence-dir"] && args["evidence-dir"] !== true
+      ? resolve(args["evidence-dir"])
+      : undefined;
+    const limit = args.limit && args.limit !== true ? Number(args.limit) : 5;
+    const dryRun = Boolean(args["dry-run"]);
+
+    const goal = readJson(goalPath);
+    const results = runMachineIntake({ targetPath, goal, stateCoreDir, dataRoot, evidenceDir, limit, dryRun });
+
+    if (dryRun) {
+      console.log(`[dry-run] machine-intake: ${results.length} task(s) would be created\n`);
+      for (const r of results) {
+        console.log(`  taskId: ${r.taskId}`);
+        console.log(`  new:    python3 src/cli.py ${r.newArgs.join(" ")}`);
+        console.log(`  set:    python3 src/cli.py ${r.setArgs.join(" ")}`);
+        console.log();
+      }
+    } else {
+      print({ created: results.map((r) => ({ taskId: r.taskId, executed: r.executed })) });
+    }
     return;
   }
 
