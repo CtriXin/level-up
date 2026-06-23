@@ -22,6 +22,7 @@ import runPostMergeCleanup from "./post-merge.mjs";
 import { readTaskState, setRunner, taskStateToRunGoal } from "./state-core.mjs";
 import { parseDuration } from "./duration.mjs";
 import { runMachineIntake } from "./machine-intake.mjs";
+import { runDispatch } from "./dispatch.mjs";
 
 function parseArgv(argv) {
   const args = { _: [] };
@@ -73,6 +74,7 @@ Usage:
   level-up post-merge [--repo <repo>] [--base-ref origin/main] [--run <run-root>] [--output-dir <dir>] [--execute] [--delete-branches] [--prune-branches] [--branch-prefix codex/]
   level-up status --run <run-root>
   level-up machine-intake --target <repo path> --goal <goal.json path> --state-core-dir <dir> [--data-root <dir>] [--evidence-dir <dir>] [--limit N] [--dry-run]
+  level-up dispatch --state-core-dir <dir> --data-root <dir> [--label <label>] [--dry-run]
 
 L3 local autopilot stops before merge, deploy, and irreversible actions.`;
 }
@@ -333,6 +335,44 @@ async function main() {
       }
     } else {
       print({ created: results.map((r) => ({ taskId: r.taskId, executed: r.executed })) });
+    }
+    return;
+  }
+
+  if (command === "dispatch") {
+    const stateCoreDir = resolve(requireValue(args, "state-core-dir"));
+    const dataRoot = resolve(requireValue(args, "data-root"));
+    const label = (args.label && args.label !== true) ? String(args.label) : "AI-P3";
+    const dryRun = Boolean(args["dry-run"]);
+
+    const results = runDispatch({ stateCoreDir, dataRoot, label, dryRun });
+
+    if (dryRun) {
+      const planned = results.filter((r) => r.dryRunPlan !== null);
+      const skipped = results.filter((r) => r.skippedReason !== null);
+      console.log(`[dry-run] dispatch: ${planned.length} issue(s) would be opened, ${skipped.length} skipped
+`);
+      for (const r of planned) {
+        console.log(`  taskId:     ${r.taskId}`);
+        console.log(`  repo:       ${r.repo}`);
+        console.log(`  title:      ${r.issueTitle}`);
+        console.log(`  label:      ${r.label}`);
+        console.log(`  gh:         ${r.dryRunPlan.ghCommand}`);
+        console.log(`  set:        ${r.dryRunPlan.setNextAction}`);
+        console.log(`  advance:    ${r.dryRunPlan.advanceCommand}`);
+        console.log();
+      }
+      if (skipped.length > 0) {
+        console.log("Skipped:");
+        for (const r of skipped) {
+          console.log(`  taskId: ${r.taskId}  reason: ${r.skippedReason}`);
+        }
+      }
+    } else {
+      print({
+        dispatched: results.filter((r) => r.dispatched).map((r) => ({ taskId: r.taskId, repo: r.repo, issueUrl: r.issueUrl })),
+        skipped: results.filter((r) => !r.dispatched).map((r) => ({ taskId: r.taskId, reason: r.skippedReason }))
+      });
     }
     return;
   }
