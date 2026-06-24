@@ -1,3 +1,4 @@
+// DEPRECATED/FROZEN: level-up 执行环已废弃,改用 looper;勿新增依赖。见 docs/STATUS.md
 const CLEAN_TRAILING_WHITESPACE_COMMAND = "node -e \"const { spawnSync } = require('child_process'); const fs = require('fs'); const check = spawnSync('git', ['diff', '--check'], { encoding: 'utf8' }); const files = [...new Set((check.stdout || '').split(/\\\\r?\\\\n/).map((line) => line.split(':')[0]).filter(Boolean))]; for (const file of files) { if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) continue; const data = fs.readFileSync(file, 'utf8'); const next = data.replace(/[ \\\\t]+$/gm, '').replace(/\\\\n{2,}$/g, '\\\\n'); if (next !== data) fs.writeFileSync(file, next); }\"";
 
 export function buildRepairPlan(trigger, lastResult) {

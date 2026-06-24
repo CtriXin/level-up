@@ -1,5 +1,10 @@
 # level-up
 
+> **模块状态(step B 收口)**: level-up 当前 = **冻结的执行环** + **活的机器源模块**。
+> 执行环(autopilot/strategy/evaluator/apply/dev-loop/self-review/runner/metric/repair-adapter/redline)已冻结废弃,与 looper 执行环重复,牌面保留 looper;勿新增对它们的依赖。
+> 活的机器源(auto-research/util/outpact-adapter/machine-intake)独立,不依赖执行环,可被外部复用。
+> 详见 [`docs/STATUS.md`](docs/STATUS.md)。
+
 `level-up` is an agent-facing autoresearch runtime for L3 local autopilot work.
 
 It is not a giant skill. It is a thin experiment loop with optional capability slots. An agent may use or skip each slot, but every skip must be explicit.

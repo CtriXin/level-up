@@ -1,3 +1,4 @@
+// DEPRECATED/FROZEN: level-up 执行环已废弃,改用 looper;勿新增依赖。见 docs/STATUS.md
 import { existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { generateIdeas } from "./ideation.mjs";
