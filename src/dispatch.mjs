@@ -17,6 +17,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
+const TASK_MARKER_PREFIX = "machine-intake-task-id:";
+
 // ---------------------------------------------------------------------------
 // State-core CLI helpers
 // ---------------------------------------------------------------------------
@@ -27,10 +29,11 @@ import { join, resolve } from "node:path";
  *
  * @param {string}   stateCoreDir  Path to state-core repo root (contains src/cli.py).
  * @param {string[]} cliArgs       Arguments after "python3 src/cli.py".
+ * @param {Function} spawnCommand  spawnSync-compatible command runner.
  * @returns {string}
  */
-function runStateCoreCliArgs(stateCoreDir, cliArgs) {
-  const result = spawnSync("python3", ["src/cli.py", ...cliArgs], {
+function runStateCoreCliArgs(stateCoreDir, cliArgs, spawnCommand = spawnSync) {
+  const result = spawnCommand("python3", ["src/cli.py", ...cliArgs], {
     cwd: stateCoreDir,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
@@ -135,10 +138,11 @@ function parseGitHubOwnerRepo(remoteUrl) {
  * Infer the GitHub "owner/repo" from the git remote of the directory at
  * packet.scope.path.
  *
- * @param {string} scopePath  Directory containing the target git repo.
+ * @param {string} scopePath      Directory containing the target git repo.
+ * @param {Function} spawnCommand spawnSync-compatible command runner.
  * @returns {{ ownerRepo: string|null, skipReason: string|null }}
  */
-function inferGitHubRepo(scopePath) {
+function inferGitHubRepo(scopePath, spawnCommand = spawnSync) {
   if (!scopePath) {
     return { ownerRepo: null, skipReason: "packet.scope.path is missing or empty" };
   }
@@ -148,7 +152,7 @@ function inferGitHubRepo(scopePath) {
     return { ownerRepo: null, skipReason: `scope path does not exist: ${resolved}` };
   }
 
-  const result = spawnSync("git", ["remote", "get-url", "origin"], {
+  const result = spawnCommand("git", ["remote", "get-url", "origin"], {
     cwd: resolved,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
@@ -178,6 +182,10 @@ function inferGitHubRepo(scopePath) {
 // Issue body assembly
 // ---------------------------------------------------------------------------
 
+function buildTaskMarker(taskId) {
+  return `${TASK_MARKER_PREFIX} ${taskId}`;
+}
+
 /**
  * Build a GitHub issue body from a packet.
  *
@@ -190,12 +198,13 @@ function buildIssueBody(packet, taskId) {
   const hypothesis = packet?.action_spec?.hypothesis ?? "(no hypothesis provided)";
   const expectedImpact = packet?.action_spec?.expected_impact ?? "(no expected impact provided)";
   const acceptance = packet?.acceptance ?? packet?.action_spec?.acceptance ?? "(no acceptance criteria provided)";
-  const rollback = packet?.meta?.rollback ?? "(no rollback information provided)";
+  const rollback = packet?.constraints?.rollback_plan ?? packet?.meta?.rollback ?? "(no rollback information provided)";
   const workType = packet?.work_type ?? "(unknown work type)";
   const scopePath = packet?.scope?.path ?? "(unknown path)";
 
   return [
     "<!-- 由 machine-intake dispatch bridge 自动开 -->",
+    buildTaskMarker(taskId),
     "",
     `**来源**: auto-research / candidate_id: \`${candidateId}\``,
     `**state-core task**: \`${taskId}\``,
@@ -228,6 +237,98 @@ function buildIssueBody(packet, taskId) {
 }
 
 // ---------------------------------------------------------------------------
+// GitHub issue idempotency
+// ---------------------------------------------------------------------------
+
+function describeSpawnFailure(result) {
+  const stderr = (result.stderr ?? "").trim();
+  const status = result.status ?? "unknown";
+  const error = result.error?.message ? ` (${result.error.message})` : "";
+  return `exit ${status}${error}: ${stderr || "(no stderr)"}`;
+}
+
+function findExistingIssueUrl(ownerRepo, taskId, spawnCommand = spawnSync) {
+  let ghResult;
+  try {
+    ghResult = spawnCommand(
+      "gh",
+      [
+        "issue", "list",
+        "-R", ownerRepo,
+        "--state", "all",
+        "--search", `${taskId} in:body`,
+        "--json", "url",
+        "--jq", ".[0].url // \"\""
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+  } catch (err) {
+    return { ok: false, issueUrl: null, error: `gh issue list threw: ${err.message}` };
+  }
+
+  if (ghResult.status !== 0) {
+    return {
+      ok: false,
+      issueUrl: null,
+      error: `gh issue list failed (${describeSpawnFailure(ghResult)})`
+    };
+  }
+
+  const issueUrl = (ghResult.stdout ?? "").trim();
+  return { ok: true, issueUrl: issueUrl || null, error: null };
+}
+
+function createIssue({ ownerRepo, label, issueTitle, issueBody, spawnCommand = spawnSync }) {
+  let ghResult;
+  try {
+    ghResult = spawnCommand(
+      "gh",
+      [
+        "issue", "create",
+        "--repo", ownerRepo,
+        "--label", label,
+        "--title", issueTitle,
+        "--body", issueBody
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+  } catch (err) {
+    return { ok: false, issueUrl: null, error: `gh issue create threw: ${err.message}` };
+  }
+
+  if (ghResult.status !== 0) {
+    return {
+      ok: false,
+      issueUrl: null,
+      error: `gh issue create failed (${describeSpawnFailure(ghResult)})`
+    };
+  }
+
+  return { ok: true, issueUrl: (ghResult.stdout ?? "").trim(), error: null };
+}
+
+function writeDispatchState({ stateCoreDir, dataRoot, taskId, issueUrl, spawnCommand = spawnSync }) {
+  runStateCoreCliArgs(stateCoreDir, [
+    "set",
+    "--task-id", taskId,
+    "--root", dataRoot,
+    "--next-action", `dispatched: ${issueUrl}`
+  ], spawnCommand);
+
+  const latestState = readTaskStateFile(dataRoot, taskId);
+  if (latestState?.phase === "scoped") {
+    return;
+  }
+
+  runStateCoreCliArgs(stateCoreDir, [
+    "advance",
+    "--task-id", taskId,
+    "--phase", "scoped",
+    "--root", dataRoot
+  ], spawnCommand);
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -241,6 +342,7 @@ function buildIssueBody(packet, taskId) {
  * @param {string}  [params.label="AI-P3"] GitHub issue label to apply.
  * @param {boolean} [params.dryRun=false] When true, only collect plans; do not open
  *                                         issues or advance phase.
+ * @param {Function} [params.spawnCommand] spawnSync-compatible runner for tests.
  * @returns {Array<{
  *   taskId: string,
  *   repo: string|null,
@@ -252,7 +354,7 @@ function buildIssueBody(packet, taskId) {
  *   dryRunPlan: object|null
  * }>}
  */
-export function runDispatch({ stateCoreDir, dataRoot, label = "AI-P3", dryRun = false }) {
+export function runDispatch({ stateCoreDir, dataRoot, label = "AI-P3", dryRun = false, spawnCommand = spawnSync }) {
   if (!stateCoreDir || typeof stateCoreDir !== "string") {
     throw new Error("runDispatch: stateCoreDir (string) is required");
   }
@@ -313,7 +415,7 @@ export function runDispatch({ stateCoreDir, dataRoot, label = "AI-P3", dryRun = 
     }
 
     // Infer GitHub repo from scope.path
-    const { ownerRepo, skipReason } = inferGitHubRepo(packet?.scope?.path);
+    const { ownerRepo, skipReason } = inferGitHubRepo(packet?.scope?.path, spawnCommand);
 
     if (skipReason) {
       results.push({
@@ -339,20 +441,6 @@ export function runDispatch({ stateCoreDir, dataRoot, label = "AI-P3", dryRun = 
     // Assemble issue body
     const issueBody = buildIssueBody(packet, taskId);
 
-    // Build the write-back commands for dry-run reporting
-    const setArgs = [
-      "set",
-      "--task-id", taskId,
-      "--root", resolvedDataRoot
-      // --next-action set after we know the issueUrl
-    ];
-    const advanceArgs = [
-      "advance",
-      "--task-id", taskId,
-      "--phase", "scoped",
-      "--root", resolvedDataRoot
-    ];
-
     if (dryRun) {
       results.push({
         taskId,
@@ -363,7 +451,9 @@ export function runDispatch({ stateCoreDir, dataRoot, label = "AI-P3", dryRun = 
         dispatched: false,
         skippedReason: null,
         dryRunPlan: {
+          searchCommand: `gh issue list -R ${ownerRepo} --state all --search ${JSON.stringify(`${taskId} in:body`)}`,
           ghCommand: `gh issue create --repo ${ownerRepo} --label ${label} --title ${JSON.stringify(issueTitle)} --body "(body omitted)"`,
+          issueBody,
           setNextAction: `python3 src/cli.py set --task-id ${taskId} --next-action "dispatched: <issue-url>" --root ${resolvedDataRoot}`,
           advanceCommand: `python3 src/cli.py advance --task-id ${taskId} --phase scoped --root ${resolvedDataRoot}`
         }
@@ -371,38 +461,9 @@ export function runDispatch({ stateCoreDir, dataRoot, label = "AI-P3", dryRun = 
       continue;
     }
 
-    // dryRun=false: actually open the issue
-    let issueUrl = null;
-    try {
-      const ghResult = spawnSync(
-        "gh",
-        [
-          "issue", "create",
-          "--repo", ownerRepo,
-          "--label", label,
-          "--title", issueTitle,
-          "--body", issueBody
-        ],
-        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
-      );
-
-      if (ghResult.status !== 0) {
-        const stderr = (ghResult.stderr ?? "").trim();
-        results.push({
-          taskId,
-          repo: ownerRepo,
-          issueTitle,
-          label,
-          issueUrl: null,
-          dispatched: false,
-          skippedReason: `gh issue create failed (exit ${ghResult.status}): ${stderr || "(no stderr)"}`,
-          dryRunPlan: null
-        });
-        continue;
-      }
-
-      issueUrl = (ghResult.stdout ?? "").trim();
-    } catch (err) {
+    // dryRun=false: search first, then create only when no prior issue carries this task id.
+    const existingIssue = findExistingIssueUrl(ownerRepo, taskId, spawnCommand);
+    if (!existingIssue.ok) {
       results.push({
         taskId,
         repo: ownerRepo,
@@ -410,21 +471,50 @@ export function runDispatch({ stateCoreDir, dataRoot, label = "AI-P3", dryRun = 
         label,
         issueUrl: null,
         dispatched: false,
-        skippedReason: `gh issue create threw: ${err.message}`,
+        skippedReason: existingIssue.error,
         dryRunPlan: null
       });
       continue;
     }
 
+    let issueUrl = existingIssue.issueUrl;
+    if (!issueUrl) {
+      const createdIssue = createIssue({
+        ownerRepo,
+        label,
+        issueTitle,
+        issueBody,
+        spawnCommand
+      });
+
+      if (!createdIssue.ok) {
+        results.push({
+          taskId,
+          repo: ownerRepo,
+          issueTitle,
+          label,
+          issueUrl: null,
+          dispatched: false,
+          skippedReason: createdIssue.error,
+          dryRunPlan: null
+        });
+        continue;
+      }
+
+      issueUrl = createdIssue.issueUrl;
+    }
+
     // Write back to state-core: set next-action + advance to scoped
     try {
-      runStateCoreCliArgs(resolvedStateCoreDir, [
-        ...setArgs,
-        "--next-action", `dispatched: ${issueUrl}`
-      ]);
-      runStateCoreCliArgs(resolvedStateCoreDir, advanceArgs);
+      writeDispatchState({
+        stateCoreDir: resolvedStateCoreDir,
+        dataRoot: resolvedDataRoot,
+        taskId,
+        issueUrl,
+        spawnCommand
+      });
     } catch (err) {
-      // Issue is already opened — record partial success with a warning
+      // Issue is already opened or found — record partial success with a warning.
       results.push({
         taskId,
         repo: ownerRepo,
@@ -432,7 +522,7 @@ export function runDispatch({ stateCoreDir, dataRoot, label = "AI-P3", dryRun = 
         label,
         issueUrl,
         dispatched: false,
-        skippedReason: `issue opened (${issueUrl}) but state-core write-back failed: ${err.message}`,
+        skippedReason: `issue available (${issueUrl}) but state-core write-back failed: ${err.message}`,
         dryRunPlan: null
       });
       continue;

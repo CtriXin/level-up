@@ -5,8 +5,8 @@
  * Uses Node.js built-in test runner (node --test).
  *
  * Strategy:
- * - All tests use dryRun=true to avoid any real GitHub issue creation or
- *   state-core mutations.
+ * - Most tests use dryRun=true to avoid side effects; live-path tests inject a
+ *   fake spawnCommand so no real GitHub or state-core command runs.
  * - Sets up a temporary filesystem fixture:
  *     <tmpDir>/.state/auto-research-abc/task-state.json    (intake, should be dispatched)
  *     <tmpDir>/.state/auto-research-xyz/task-state.json    (scoped, should be skipped — already dispatched)
@@ -71,10 +71,13 @@ function makePacket(candidateId, overrides = {}) {
       ...(overrides.action_spec ?? {})
     },
     acceptance: `Acceptance criteria for ${candidateId}`,
+    constraints: {
+      rollback_plan: `Rollback for ${candidateId}`,
+      ...(overrides.constraints ?? {})
+    },
     meta: {
       candidate_id: candidateId,
       risk_hint: "Low",
-      rollback: `Rollback for ${candidateId}`,
       ...(overrides.meta ?? {})
     },
     ...overrides
@@ -101,6 +104,10 @@ function writeTaskFixture({ dataRoot, taskId, phase, packet }) {
     ledger_ref: packet ? packetPath : null
   };
   writeFileSync(join(stateDir, "task-state.json"), JSON.stringify(taskState, null, 2) + "\n");
+}
+
+function readTaskState(dataRoot, taskId) {
+  return JSON.parse(readFileSync(join(dataRoot, ".state", taskId, "task-state.json"), "utf8"));
 }
 
 before(() => {
@@ -280,6 +287,13 @@ describe("runDispatch dryRun=true — issue title/body assembly", () => {
     assert.ok(cmd.includes("scoped"), `advanceCommand must use phase=scoped: ${cmd}`);
     assert.ok(cmd.includes("auto-research-abc"), `advanceCommand must include taskId: ${cmd}`);
   });
+
+  it("issue body includes machine marker and constraints rollback_plan", () => {
+    const body = abcResult.dryRunPlan.issueBody;
+    assert.ok(body.includes("machine-intake-task-id: auto-research-abc"), body);
+    assert.ok(body.includes("Rollback for abc"), body);
+    assert.ok(!body.includes("(no rollback information provided)"), body);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -385,6 +399,119 @@ describe("runDispatch dryRun=true — custom label", () => {
     assert.ok(r, "result must exist");
     assert.equal(r.label, "custom-label-x");
     assert.ok(r.dryRunPlan.ghCommand.includes("custom-label-x"), "ghCommand must use custom label");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live path idempotency: search-before-create prevents duplicate issues
+// ---------------------------------------------------------------------------
+
+describe("runDispatch dryRun=false — idempotent issue dispatch", () => {
+  it("reuses the existing issue when the first write-back fails", () => {
+    const dataRoot = makeTempDir("idempotency-root");
+    const taskId = "auto-research-idempotent";
+    const issueUrl = "https://github.com/CtriXin/diagramming-skill/issues/777";
+    const calls = [];
+    let createdIssueUrl = null;
+    let failNextStateWrite = true;
+
+    function spawnCommand(command, args, options) {
+      calls.push({ command, args: [...args] });
+
+      if (command === "git") {
+        return spawnSync(command, args, options);
+      }
+
+      if (command === "gh" && args[0] === "issue" && args[1] === "list") {
+        return {
+          status: 0,
+          stdout: createdIssueUrl ? `${createdIssueUrl}\n` : "",
+          stderr: ""
+        };
+      }
+
+      if (command === "gh" && args[0] === "issue" && args[1] === "create") {
+        createdIssueUrl = issueUrl;
+        return { status: 0, stdout: `${issueUrl}\n`, stderr: "" };
+      }
+
+      if (command === "python3" && args[0] === "src/cli.py") {
+        if (failNextStateWrite) {
+          failNextStateWrite = false;
+          return { status: 1, stdout: "", stderr: "simulated write-back failure" };
+        }
+
+        const commandName = args[1];
+        const taskState = readTaskState(dataRoot, taskId);
+        if (commandName === "set") {
+          taskState.next_action = args[args.indexOf("--next-action") + 1];
+        } else if (commandName === "advance") {
+          taskState.phase = args[args.indexOf("--phase") + 1];
+        } else {
+          return { status: 1, stdout: "", stderr: `unexpected state-core command ${commandName}` };
+        }
+
+        writeFileSync(
+          join(dataRoot, ".state", taskId, "task-state.json"),
+          JSON.stringify(taskState, null, 2) + "\n"
+        );
+        return { status: 0, stdout: "", stderr: "" };
+      }
+
+      return {
+        status: 1,
+        stdout: "",
+        stderr: `unexpected command: ${command} ${args.join(" ")}`
+      };
+    }
+
+    try {
+      writeTaskFixture({
+        dataRoot,
+        taskId,
+        phase: "intake",
+        packet: makePacket("idempotent")
+      });
+
+      const first = runDispatch({
+        stateCoreDir: "/tmp/fake-state-core",
+        dataRoot,
+        label: "AI-P3",
+        dryRun: false,
+        spawnCommand
+      });
+
+      assert.equal(first.length, 1);
+      assert.equal(first[0].issueUrl, issueUrl);
+      assert.equal(first[0].dispatched, false);
+      assert.match(first[0].skippedReason, /write-back failed/);
+      assert.equal(readTaskState(dataRoot, taskId).phase, "intake");
+
+      const second = runDispatch({
+        stateCoreDir: "/tmp/fake-state-core",
+        dataRoot,
+        label: "AI-P3",
+        dryRun: false,
+        spawnCommand
+      });
+
+      const createCalls = calls.filter(
+        (call) => call.command === "gh" && call.args[0] === "issue" && call.args[1] === "create"
+      );
+      const listCalls = calls.filter(
+        (call) => call.command === "gh" && call.args[0] === "issue" && call.args[1] === "list"
+      );
+
+      assert.equal(second.length, 1);
+      assert.equal(second[0].issueUrl, issueUrl);
+      assert.equal(second[0].dispatched, true);
+      assert.equal(second[0].skippedReason, null);
+      assert.equal(createCalls.length, 1, "second run must not create a duplicate issue");
+      assert.equal(listCalls.length, 2, "each live run searches before create/write-back");
+      assert.equal(readTaskState(dataRoot, taskId).phase, "scoped");
+    } finally {
+      rmSync(dataRoot, { recursive: true, force: true });
+    }
   });
 });
 
